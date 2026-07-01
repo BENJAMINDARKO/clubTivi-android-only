@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../data/datasources/local/database.dart' as db;
+import '../../data/services/parental_control_service.dart';
 import '../providers/provider_manager.dart';
 import '../media_shared_widgets.dart';
 import '../player/player_service.dart';
@@ -185,6 +186,10 @@ class _ParentalScreenState extends ConsumerState<ParentalScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(parentalUpdateProvider, (_, __) {
+      if (mounted) _load();
+    });
+
     if (_loading) {
       return const Scaffold(backgroundColor: Colors.black, body: Center(child: CircularProgressIndicator()));
     }
@@ -273,18 +278,21 @@ class _CategoryCardState extends State<_CategoryCard> {
         ),
         alignment: Alignment.center,
         child: Padding(
-          padding: const EdgeInsets.all(12.0),
+          padding: const EdgeInsets.all(8.0),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.folder_special_rounded, color: Colors.white70, size: 32),
-              const SizedBox(height: 8),
-              Text(
-                widget.category.groupTitle,
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+              const Icon(Icons.folder_special_rounded, color: Colors.white70, size: 28),
+              const SizedBox(height: 4),
+              Flexible(
+                child: Text(
+                  widget.category.groupTitle,
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ],
           ),

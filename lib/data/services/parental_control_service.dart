@@ -26,6 +26,9 @@ class ParentalControlService {
   }
 }
 
+/// Used to trigger a refresh in the Parental tab when items are hidden or locked.
+final parentalUpdateProvider = StateProvider<int>((ref) => 0);
+
 final parentalControlProvider =
     FutureProvider<ParentalControlService>((ref) async {
   final prefs = await SharedPreferences.getInstance();

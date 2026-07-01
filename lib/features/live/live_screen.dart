@@ -215,6 +215,20 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
   }
 
   void _playChannel(db.Channel ch) async {
+    if (ch.parentalLocked) {
+      final pinSvc = await ref.read(parentalControlProvider.future);
+      if (pinSvc.isPinSet) {
+        final entered = await showPinDialog(
+          context,
+          title: 'Enter PIN',
+          subtitle: 'This content is locked.',
+        );
+        if (entered == null || !pinSvc.verifyPin(entered)) {
+          return;
+        }
+      }
+    }
+
     final ps = ref.read(playerServiceProvider);
     await ps.play(
       ch.streamUrl,
@@ -250,6 +264,7 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
   Future<void> _hideChannel(db.Channel channel) async {
     final database = ref.read(databaseProvider);
     await database.hideChannel(channel.id, true);
+    ref.read(parentalUpdateProvider.notifier).state++;
     _load();
   }
 
@@ -263,6 +278,7 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     final newValue = !ch.parentalLocked;
     await ref.read(databaseProvider).setChannelParentalLock(ch.id, newValue);
     ref.read(appCacheProvider.notifier).updateChannel(ch.copyWith(parentalLocked: newValue));
+    ref.read(parentalUpdateProvider.notifier).state++;
     _load();
   }
 
@@ -282,6 +298,8 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
   Future<void> _lockCategory(String cat, bool isLocked) async {
     final database = ref.read(databaseProvider);
     await database.setCategoryParentalLock(_selectedProviderId, cat, _streamType, !isLocked);
+    ref.read(parentalUpdateProvider.notifier).state++;
+    ref.read(appCacheProvider.notifier).refresh();
     _load();
   }
 

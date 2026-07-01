@@ -182,7 +182,9 @@ class PlayerService {
     _proxyActive = false;
     await _streamProxy.stop();
     await _ensureReady();
+    if (_currentUrl != url) return; // Cancelled before ready
     await player.open(Media(url));
+    if (_currentUrl != url) return; // Cancelled during open
     await _bufferManager.applyForStream(url, this);
     await player.setVolume(100.0);
 
@@ -251,10 +253,12 @@ class PlayerService {
 
   /// Stop playback.
   Future<void> stop() async {
+    _currentUrl = null;
     _bufferManager.stop();
     _failoverCheckTimer?.cancel();
     _bufferTrackTimer?.cancel();
     _disposeWarmPlayer();
+    await _streamProxy.stop();
     await player.stop();
   }
 

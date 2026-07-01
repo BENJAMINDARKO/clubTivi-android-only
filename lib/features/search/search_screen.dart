@@ -5,7 +5,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/pin_dialog.dart';
 import '../../data/datasources/local/database.dart' as db;
+import '../../data/services/parental_control_service.dart';
 import '../player/player_service.dart';
 import 'search_providers.dart';
 
@@ -21,7 +23,26 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   static const _accent = Color(0xFF6C5CE7);
 
   final _searchController = TextEditingController();
-  final _searchFocusNode = FocusNode();
+  late final _searchFocusNode = FocusNode(
+    onKeyEvent: (node, event) {
+      if (event is KeyDownEvent) {
+        if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+          final pf = FocusManager.instance.primaryFocus;
+          if (pf != null) {
+            pf.focusInDirection(TraversalDirection.down);
+            return KeyEventResult.handled;
+          }
+        } else if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+          final pf = FocusManager.instance.primaryFocus;
+          if (pf != null) {
+            pf.focusInDirection(TraversalDirection.up);
+            return KeyEventResult.handled;
+          }
+        }
+      }
+      return KeyEventResult.ignored;
+    },
+  );
   Timer? _debounce;
 
   @override
@@ -45,14 +66,62 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     });
   }
 
-  void _play(db.Channel ch) {
+  void _play(db.Channel ch) async {
+    if (ch.parentalLocked) {
+      final pinSvc = await ref.read(parentalControlProvider.future);
+      if (pinSvc.isPinSet) {
+        final entered = await showPinDialog(
+          context,
+          title: 'Enter PIN',
+          subtitle: 'This content is locked.',
+        );
+        if (entered == null || !pinSvc.verifyPin(entered)) {
+          return;
+        }
+      }
+    }
+
+    if (ch.streamType == 'vod') {
+      context.push('/movies/details', extra: ch);
+      return;
+    } else if (ch.streamType == 'series') {
+      context.push('/series/details', extra: ch);
+      return;
+    }
+
+    final searchState = ref.read(searchProvider);
     final playerService = ref.read(playerServiceProvider);
-    playerService.play(ch.streamUrl,
-        channelId: ch.id,
-        channelName: ch.name,
-        epgChannelId: null,
-        tvgId: ch.tvgId);
-    context.go('/');
+    
+    await playerService.play(
+      ch.streamUrl,
+      channelId: ch.id,
+      channelName: ch.name,
+      epgChannelId: null,
+      tvgId: ch.tvgId,
+    );
+
+    final results = searchState.results.where((c) => c.streamType != 'vod' && c.streamType != 'series').toList();
+    final index = results.indexWhere((c) => c.id == ch.id);
+
+    context.push('/player', extra: {
+      'streamUrl': ch.streamUrl,
+      'channelName': ch.name,
+      'channelLogo': ch.tvgLogo,
+      'alternativeUrls': <String>[],
+      'channels': results.map((c) => {
+        'id': c.id,
+        'providerId': c.providerId,
+        'name': c.name,
+        'originalName': c.name,
+        'streamUrl': c.streamUrl,
+        'tvgLogo': c.tvgLogo,
+        'tvgId': c.tvgId,
+        'tvgName': c.tvgName,
+        'groupTitle': c.groupTitle,
+        'streamType': c.streamType,
+      }).toList(),
+      'currentIndex': index >= 0 ? index : 0,
+    });
   }
 
   Color _typeColor(String type) {
@@ -97,36 +166,17 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           children: [
             // Top search bar
             Container(
-              color: const Color(0xFF0D0D18),
+              color: Colors.black,
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-              child: Focus(
-                onKeyEvent: (node, event) {
-                  if (event is KeyDownEvent) {
-                    if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
-                      final pf = FocusManager.instance.primaryFocus;
-                      if (pf != null) {
-                        pf.focusInDirection(TraversalDirection.down);
-                        return KeyEventResult.handled;
-                      }
-                    } else if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
-                      final pf = FocusManager.instance.primaryFocus;
-                      if (pf != null) {
-                        pf.focusInDirection(TraversalDirection.up);
-                        return KeyEventResult.handled;
-                      }
-                    }
-                  }
-                  return KeyEventResult.ignored;
-                },
-                child: TextField(
+              child: TextField(
                   controller: _searchController,
                   focusNode: _searchFocusNode,
-                  autofocus: false,
+                  autofocus: true,
                 style: const TextStyle(color: Colors.white, fontSize: 18),
                 decoration: InputDecoration(
                   hintText: 'Search across all content…',
                   hintStyle: const TextStyle(color: Colors.white38, fontSize: 18),
-                  prefixIcon: const Icon(Icons.search_rounded, color: _accent, size: 28),
+                  prefixIcon: const Icon(Icons.search_rounded, color: Colors.white54, size: 28),
                   suffixIcon: searchState.query.isNotEmpty
                       ? IconButton(
                           icon: const Icon(Icons.clear_rounded, color: Colors.white38),
@@ -137,7 +187,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                         )
                       : null,
                   filled: true,
-                  fillColor: const Color(0xFF1A1A2E),
+                  fillColor: Colors.white.withValues(alpha: 0.1),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide.none,
@@ -145,12 +195,11 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                   contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
                 ),
                 onChanged: _onQueryChanged,
-                ),
               ),
             ),
             // Tab filter
             Container(
-              color: const Color(0xFF0D0D18),
+              color: Colors.black,
               child: Row(
                 children: SearchTab.values.map((tab) {
                   final selected = searchState.tab == tab;
@@ -278,10 +327,10 @@ class _SearchResultTileState extends State<_SearchResultTile> {
           duration: const Duration(milliseconds: 120),
           margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 3),
           decoration: BoxDecoration(
-            color: _focused ? accent.withValues(alpha: 0.2) : const Color(0xFF1A1A2E),
+            color: _focused ? accent.withValues(alpha: 0.2) : Colors.transparent,
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
-              color: _focused ? Colors.white : Colors.transparent,
+              color: _focused ? Colors.white : Colors.white12,
               width: 2,
             ),
           ),
