@@ -19,9 +19,182 @@ import '../../data/services/epg_refresh_service.dart';
 import '../providers/provider_manager.dart';
 import '../remote/web_remote_server.dart';
 import 'add_epg_source_dialog.dart';
+import 'parental_controls_screen.dart';
 import '../shows/shows_providers.dart';
 import '../../data/datasources/remote/trakt_client.dart';
-import '../../data/datasources/remote/tmdb_client.dart';
+import '../../data/datasources/remote/cinemeta_client.dart';
+import '../../data/services/preferences_service.dart';
+
+class TvListTile extends StatefulWidget {
+  final Widget? leading;
+  final Widget? title;
+  final Widget? subtitle;
+  final Widget? trailing;
+  final VoidCallback? onTap;
+  final bool autofocus;
+  final bool isThreeLine;
+  final bool dense;
+  final bool selected;
+
+  const TvListTile({
+    super.key,
+    this.leading,
+    this.title,
+    this.subtitle,
+    this.trailing,
+    this.onTap,
+    this.autofocus = false,
+    this.isThreeLine = false,
+    this.dense = false,
+    this.selected = false,
+  });
+
+  @override
+  State<TvListTile> createState() => _TvListTileState();
+}
+
+class _TvListTileState extends State<TvListTile> {
+  bool _hasFocus = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+      child: Material(
+        type: MaterialType.transparency,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+          side: BorderSide(
+            color: _hasFocus ? Colors.white : Colors.transparent,
+            width: 2,
+          ),
+        ),
+        child: ListTile(
+          autofocus: widget.autofocus,
+          focusColor: Colors.white.withValues(alpha: 0.1),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+          leading: widget.leading,
+          title: widget.title,
+          subtitle: widget.subtitle,
+          trailing: widget.trailing,
+          onTap: widget.onTap,
+          isThreeLine: widget.isThreeLine,
+          dense: widget.dense,
+          selected: widget.selected,
+          onFocusChange: (focused) => setState(() => _hasFocus = focused),
+        ),
+      ),
+    );
+  }
+}
+
+class TvSwitchListTile extends StatefulWidget {
+  final Widget? secondary;
+  final Widget? title;
+  final Widget? subtitle;
+  final bool value;
+  final ValueChanged<bool>? onChanged;
+  final bool autofocus;
+
+  const TvSwitchListTile({
+    super.key,
+    this.secondary,
+    this.title,
+    this.subtitle,
+    required this.value,
+    this.onChanged,
+    this.autofocus = false,
+  });
+
+  @override
+  State<TvSwitchListTile> createState() => _TvSwitchListTileState();
+}
+
+class _TvSwitchListTileState extends State<TvSwitchListTile> {
+  bool _hasFocus = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+      child: Material(
+        type: MaterialType.transparency,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+          side: BorderSide(
+            color: _hasFocus ? Colors.white : Colors.transparent,
+            width: 2,
+          ),
+        ),
+        child: SwitchListTile(
+          autofocus: widget.autofocus,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+          secondary: widget.secondary,
+          title: widget.title,
+          subtitle: widget.subtitle,
+          value: widget.value,
+          onChanged: widget.onChanged,
+          onFocusChange: (focused) => setState(() => _hasFocus = focused),
+        ),
+      ),
+    );
+  }
+}
+
+class TvRadioListTile<T> extends StatefulWidget {
+  final Widget? secondary;
+  final Widget? title;
+  final Widget? subtitle;
+  final T value;
+  final T? groupValue;
+  final ValueChanged<T?>? onChanged;
+
+  const TvRadioListTile({
+    super.key,
+    this.secondary,
+    this.title,
+    this.subtitle,
+    required this.value,
+    this.groupValue,
+    this.onChanged,
+  });
+
+  @override
+  State<TvRadioListTile<T>> createState() => _TvRadioListTileState<T>();
+}
+
+class _TvRadioListTileState<T> extends State<TvRadioListTile<T>> {
+  bool _hasFocus = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+      child: Material(
+        type: MaterialType.transparency,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+          side: BorderSide(
+            color: _hasFocus ? Colors.white : Colors.transparent,
+            width: 2,
+          ),
+        ),
+        child: RadioListTile<T>(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+          secondary: widget.secondary,
+          title: widget.title,
+          subtitle: widget.subtitle,
+          value: widget.value,
+          groupValue: widget.groupValue,
+          onChanged: widget.onChanged,
+          onFocusChange: (focused) => setState(() => _hasFocus = focused),
+        ),
+      ),
+    );
+  }
+}
+
+
 
 Future<void> _exportBackup(BuildContext context) async {
   try {
@@ -326,13 +499,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ),
         title: const Text('Settings'),
       ),
-      body: FocusTraversalGroup(
-        child: ListView(
+      body: ListView(
           children: [
           _SettingsSection(
             title: 'Providers',
             children: [
-              ListTile(
+              TvListTile(
                 autofocus: true,
                 leading: const Icon(Icons.dns_rounded),
                 title: const Text('Manage Providers'),
@@ -345,14 +517,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           _SettingsSection(
             title: 'EPG',
             children: [
-              ListTile(
+              TvListTile(
                 leading: const Icon(Icons.source_rounded),
                 title: const Text('EPG Sources'),
                 subtitle: const Text('Manage XMLTV feeds (epg.best, etc.)'),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => _openEpgSourcesScreen(context, ref),
               ),
-              ListTile(
+              TvListTile(
                 leading: const Icon(Icons.link_rounded),
                 title: const Text('EPG Mappings'),
                 subtitle: const Text('Channel ↔ EPG mapping manager'),
@@ -360,6 +532,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 onTap: () => context.push('/epg-mapping'),
               ),
               _AutoRefreshTile(),
+            ],
+          ),
+          _SettingsSection(
+            title: 'Parental Controls',
+            children: [
+              TvListTile(
+                leading: const Icon(Icons.lock_rounded),
+                title: const Text('Parental Controls'),
+                subtitle: const Text('Set PIN, hide or lock categories and channels'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                      builder: (_) => const ParentalControlsScreen()),
+                ),
+              ),
             ],
           ),
           _SettingsSection(
@@ -373,6 +560,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           _SettingsSection(
             title: 'Display',
             children: [
+              _ViewStyleTile(),
               _LocationTile(),
               _TimeFormatTile(),
             ],
@@ -380,7 +568,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           _SettingsSection(
             title: 'Remote Control',
             children: [
-              SwitchListTile(
+              TvSwitchListTile(
                 secondary: const Icon(Icons.web_rounded),
                 title: const Text('Web Remote'),
                 subtitle: Text(webRemote.isRunning
@@ -396,7 +584,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   setState(() {});
                 },
               ),
-              ListTile(
+              TvListTile(
                 leading: const Icon(Icons.gamepad_rounded),
                 title: const Text('Button Mapping'),
                 subtitle: const Text('Customize remote buttons'),
@@ -409,7 +597,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             title: 'Recordings',
             children: [
               _RecordingsFolderTile(),
-              ListTile(
+              TvListTile(
                 leading: const Icon(Icons.info_outline_rounded),
                 title: const Text('How it works'),
                 subtitle: const Text('Tap to learn about recording setup'),
@@ -421,14 +609,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           _SettingsSection(
             title: 'Backup & Restore',
             children: [
-              ListTile(
+              TvListTile(
                 leading: const Icon(Icons.upload_rounded),
                 title: const Text('Export Backup'),
                 subtitle: const Text('Save providers, EPG, favorites, API keys'),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => _exportBackup(context),
               ),
-              ListTile(
+              TvListTile(
                 leading: const Icon(Icons.download_rounded),
                 title: const Text('Import Backup'),
                 subtitle: const Text('Restore from a .clubtivi file'),
@@ -440,29 +628,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           _SettingsSection(
             title: 'About',
             children: [
-              ListTile(
+              TvListTile(
                 leading: const Icon(Icons.info_outline_rounded),
                 title: const Text('clubTivi'),
                 subtitle: Text('v${AppUpdateService.currentVersion} • Open Source • Apache-2.0'),
               ),
-              ListTile(
+              TvListTile(
                 leading: const Icon(Icons.system_update_rounded),
                 title: const Text('Check for Updates'),
                 subtitle: const Text('Download latest version from GitHub'),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => _checkForUpdates(context),
               ),
-              ListTile(
-                leading: const Icon(Icons.code_rounded),
-                title: const Text('Source Code'),
-                subtitle: const Text('github.com/clubanderson/clubTivi'),
-                onTap: () => launchUrl(Uri.parse('https://github.com/clubanderson/clubTivi')),
-              ),
             ],
           ),
           _ShowsApiKeysSection(),
         ],
-        ),
       ),
     ),
       ),
@@ -755,7 +936,7 @@ class _EpgSourcesScreenState extends ConsumerState<_EpgSourcesScreen> {
                 final source = _sources[index];
                 final isRefreshing = _refreshing.contains(source.id);
                 final lastRefresh = source.lastRefresh;
-                return ListTile(
+                return TvListTile(
                   leading: Switch(
                     value: source.enabled,
                     onChanged: (val) async {
@@ -829,26 +1010,26 @@ class _ShowsApiKeysSection extends ConsumerStatefulWidget {
 
 class _ShowsApiKeysSectionState extends ConsumerState<_ShowsApiKeysSection> {
   final _traktCtrl = TextEditingController();
-  final _tmdbCtrl = TextEditingController();
+  final _cinemetaCtrl = TextEditingController();
   bool _loaded = false;
   bool _traktVerifying = false;
   bool? _traktVerified;
-  bool _tmdbVerifying = false;
-  bool? _tmdbVerified;
+  bool _cinemetaVerifying = false;
+  bool? _cinemetaVerified;
 
   @override
   void dispose() {
     _traktCtrl.dispose();
-    _tmdbCtrl.dispose();
+    _cinemetaCtrl.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final keys = ref.watch(showsApiKeysProvider);
-    if (!_loaded && (keys.traktClientId.isNotEmpty || keys.tmdbApiKey.isNotEmpty)) {
+    if (!_loaded && (keys.traktClientId.isNotEmpty )) {
       _traktCtrl.text = keys.traktClientId;
-      _tmdbCtrl.text = keys.tmdbApiKey;
+      
       _loaded = true;
     }
 
@@ -877,23 +1058,23 @@ class _ShowsApiKeysSectionState extends ConsumerState<_ShowsApiKeysSection> {
         ),
         _ApiKeyCard(
           title: 'TMDB',
-          subtitle: keys.hasTmdbKey ? 'Configured ✓' : 'Not configured',
-          isConfigured: keys.hasTmdbKey,
+          subtitle: 'Built-in',
+          isConfigured: true,
           icon: Icons.image_rounded,
-          controller: _tmdbCtrl,
+          controller: _cinemetaCtrl,
           tokenLabel: 'API Key',
           tokenHint: 'themoviedb.org/settings/api',
           tokenUrl: 'https://www.themoviedb.org/settings/api',
-          isVerifying: _tmdbVerifying,
-          verifyResult: _tmdbVerified,
+          isVerifying: _cinemetaVerifying,
+          verifyResult: _cinemetaVerified,
           onSave: () => _saveTmdb(),
           onVerify: () => _verifyTmdb(),
           onClear: () {
-            _tmdbCtrl.clear();
+            _cinemetaCtrl.clear();
             _saveTmdb();
           },
         ),
-        ListTile(
+        TvListTile(
           leading: const Icon(Icons.cloud_download_rounded),
           title: const Text('Debrid Services'),
           subtitle: Text(
@@ -916,7 +1097,7 @@ class _ShowsApiKeysSectionState extends ConsumerState<_ShowsApiKeysSection> {
     final keys = ref.read(showsApiKeysProvider);
     await ref.read(showsApiKeysProvider.notifier).save(
       traktClientId: _traktCtrl.text.trim(),
-      tmdbApiKey: keys.tmdbApiKey,
+      
       debridTokens: keys.debridTokens,
     );
     ref.invalidate(showsRepositoryProvider);
@@ -932,12 +1113,11 @@ class _ShowsApiKeysSectionState extends ConsumerState<_ShowsApiKeysSection> {
     final keys = ref.read(showsApiKeysProvider);
     await ref.read(showsApiKeysProvider.notifier).save(
       traktClientId: keys.traktClientId,
-      tmdbApiKey: _tmdbCtrl.text.trim(),
       debridTokens: keys.debridTokens,
     );
     ref.invalidate(showsRepositoryProvider);
     if (mounted) {
-      setState(() => _tmdbVerified = null);
+      setState(() => _cinemetaVerified = null);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('TMDB key saved')),
       );
@@ -960,17 +1140,17 @@ class _ShowsApiKeysSectionState extends ConsumerState<_ShowsApiKeysSection> {
   }
 
   Future<void> _verifyTmdb() async {
-    final token = _tmdbCtrl.text.trim();
+    final token = _cinemetaCtrl.text.trim();
     if (token.isEmpty) return;
-    setState(() { _tmdbVerifying = true; _tmdbVerified = null; });
+    setState(() { _cinemetaVerifying = true; _cinemetaVerified = null; });
     try {
-      final client = TmdbClient(apiKey: token);
+      final client = CinemetaClient();
       final results = await client.getTrendingTv();
-      if (mounted) setState(() => _tmdbVerified = results.isNotEmpty);
+      if (mounted) setState(() => _cinemetaVerified = results.isNotEmpty);
     } catch (_) {
-      if (mounted) setState(() => _tmdbVerified = false);
+      if (mounted) setState(() => _cinemetaVerified = false);
     } finally {
-      if (mounted) setState(() => _tmdbVerifying = false);
+      if (mounted) setState(() => _cinemetaVerifying = false);
     }
   }
 
@@ -1031,7 +1211,7 @@ class _ApiKeyCardState extends State<_ApiKeyCard> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Column(
         children: [
-          ListTile(
+          TvListTile(
             leading: Icon(
               widget.icon,
               color: widget.isConfigured
@@ -1219,7 +1399,7 @@ class _UserAgentTileState extends State<_UserAgentTile> {
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
+    return TvListTile(
       leading: const Icon(Icons.badge_rounded),
       title: const Text('User Agent'),
       subtitle: Text(_userAgent, style: const TextStyle(color: Colors.purpleAccent)),
@@ -1248,7 +1428,7 @@ class _UserAgentTileState extends State<_UserAgentTile> {
                   child: Text('Presets', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
                 ),
                 const SizedBox(height: 8),
-                ...List.generate(_presets.length, (i) => ListTile(
+                ...List.generate(_presets.length, (i) => TvListTile(
                   dense: true,
                   title: Text(_presets[i]),
                   selected: _userAgent == _presets[i],
@@ -1305,7 +1485,7 @@ class _LocationTileState extends ConsumerState<_LocationTile> {
     final subtitle = _zipcode.isNotEmpty
         ? '$_zipcode${_cityName.isNotEmpty ? ' — $_cityName' : ''}'
         : 'Auto-detected from IP';
-    return ListTile(
+    return TvListTile(
       leading: const Icon(Icons.location_on_rounded),
       title: const Text('Weather Location'),
       subtitle: Text(subtitle),
@@ -1418,6 +1598,32 @@ class _LocationTileState extends ConsumerState<_LocationTile> {
   }
 }
 
+class _ViewStyleTile extends ConsumerStatefulWidget {
+  @override
+  ConsumerState<_ViewStyleTile> createState() => _ViewStyleTileState();
+}
+
+class _ViewStyleTileState extends ConsumerState<_ViewStyleTile> {
+  @override
+  Widget build(BuildContext context) {
+    final preferences = ref.watch(preferencesServiceProvider);
+    final isSpotlight = preferences.viewStyle == ViewStyle.spotlight;
+
+    return TvSwitchListTile(
+      secondary: const Icon(Icons.grid_view_rounded),
+      title: const Text('View Style'),
+      subtitle: Text(isSpotlight ? 'Spotlight (Zephyr Style)' : 'Classic Grid'),
+      value: isSpotlight,
+      onChanged: (value) async {
+        final newStyle = value ? ViewStyle.spotlight : ViewStyle.grid;
+        await ref.read(preferencesServiceProvider).setViewStyle(newStyle);
+        // Refresh to pick up new style
+        ref.invalidate(preferencesServiceProvider);
+      },
+    );
+  }
+}
+
 class _TimeFormatTile extends StatefulWidget {
   @override
   State<_TimeFormatTile> createState() => _TimeFormatTileState();
@@ -1438,7 +1644,7 @@ class _TimeFormatTileState extends State<_TimeFormatTile> {
 
   @override
   Widget build(BuildContext context) {
-    return SwitchListTile(
+    return TvSwitchListTile(
       secondary: const Icon(Icons.schedule_rounded),
       title: const Text('24-Hour Time'),
       subtitle: Text(_use24Hour ? '14:30' : '2:30 PM'),
@@ -1472,7 +1678,7 @@ class _AutoRefreshTileState extends State<_AutoRefreshTile> {
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
+    return TvListTile(
       leading: const Icon(Icons.refresh_rounded),
       title: const Text('Auto-Refresh'),
       subtitle: Text('Every $_hours hours'),
@@ -1484,7 +1690,7 @@ class _AutoRefreshTileState extends State<_AutoRefreshTile> {
             title: const Text('Auto-Refresh Interval'),
             children: [
               for (final h in _options)
-                RadioListTile<int>(
+                TvRadioListTile<int>(
                   title: Text('Every $h hour${h == 1 ? '' : 's'}'),
                   value: h,
                   groupValue: _hours,
@@ -1531,7 +1737,7 @@ class _BufferSizeTileState extends State<_BufferSizeTile> {
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
+    return TvListTile(
       leading: const Icon(Icons.speed_rounded),
       title: const Text('Buffer Size'),
       subtitle: Text(_buffer),
@@ -1543,7 +1749,7 @@ class _BufferSizeTileState extends State<_BufferSizeTile> {
             title: const Text('Buffer Size'),
             children: [
               for (final entry in _options.entries)
-                RadioListTile<String>(
+                TvRadioListTile<String>(
                   title: Text(entry.key),
                   value: entry.key,
                   groupValue: _buffer,
@@ -1586,7 +1792,7 @@ class _FailoverModeTileState extends State<_FailoverModeTile> {
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
+    return TvListTile(
       leading: const Icon(Icons.swap_horizontal_circle_rounded),
       title: const Text('Failover Mode'),
       subtitle: Text(_options[_mode] ?? _mode),
@@ -1598,7 +1804,7 @@ class _FailoverModeTileState extends State<_FailoverModeTile> {
             title: const Text('Failover Mode'),
             children: [
               for (final entry in _options.entries)
-                RadioListTile<String>(
+                TvRadioListTile<String>(
                   title: Text(entry.value),
                   subtitle: entry.key == 'warm'
                       ? const Text('Monitors alternate streams in background', style: TextStyle(fontSize: 12))
@@ -1709,7 +1915,7 @@ class _RecordingsFolderTileState extends State<_RecordingsFolderTile> {
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
+    return TvListTile(
       leading: const Icon(Icons.folder_rounded),
       title: const Text('Recording Location'),
       subtitle: Text(

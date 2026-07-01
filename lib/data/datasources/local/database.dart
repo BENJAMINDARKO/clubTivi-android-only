@@ -25,6 +25,8 @@ const _uuid = Uuid();
   ScheduledRecordings,
   FailoverGroups,
   FailoverGroupChannels,
+  CategoryPreferences,
+  WatchHistory,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
@@ -32,7 +34,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -54,6 +56,13 @@ class AppDatabase extends _$AppDatabase {
             await m.createTable(failoverGroups);
             await m.createTable(failoverGroupChannels);
           }
+          if (from < 6) {
+            await m.addColumn(channels, channels.parentalLocked);
+          }
+          if (from < 7) {
+            await m.createTable(categoryPreferences);
+            await m.createTable(watchHistory);
+          }
         },
       );
 
@@ -64,23 +73,168 @@ class AppDatabase extends _$AppDatabase {
   Future<void> upsertProvider(ProvidersCompanion entry) =>
       into(providers).insertOnConflictUpdate(entry);
 
-  Future<void> deleteProvider(String id) =>
-      (delete(providers)..where((t) => t.id.equals(id))).go();
+  Future<void> deleteProvider(String id) async {
+    // Delete all channels for this provider
+    await (delete(channels)..where((t) => t.providerId.equals(id))).go();
+    // Delete category preferences for this provider
+    await (delete(categoryPreferences)..where((t) => t.providerId.equals(id))).go();
+    // Delete the provider's EPG source if it exists
+    await deleteEpgSource('epg_$id');
+    // Finally delete the provider itself
+    await (delete(providers)..where((t) => t.id.equals(id))).go();
+  }
+
+  // --- Channel parental lock ---
+
+  Future<void> setChannelParentalLock(String channelId, bool locked) =>
+      (update(channels)..where((t) => t.id.equals(channelId)))
+          .write(ChannelsCompanion(parentalLocked: Value(locked)));
+
+  Future<void> hideChannel(String channelId, bool hidden) =>
+      (update(channels)..where((t) => t.id.equals(channelId)))
+          .write(ChannelsCompanion(hidden: Value(hidden)));
+
+  Future<void> setChannelFavorite(String channelId, bool favorite) =>
+      (update(channels)..where((t) => t.id.equals(channelId)))
+          .write(ChannelsCompanion(favorite: Value(favorite)));
+
+  // --- Category Preferences ---
+
+  Future<List<CategoryPreference>> getAllCategoryPreferences() =>
+      select(categoryPreferences).get();
+
+  Future<CategoryPreference?> getCategoryPreference(
+      String providerId, String groupTitle, String streamType) async {
+    return (select(categoryPreferences)
+          ..where((t) =>
+              t.providerId.equals(providerId) &
+              t.groupTitle.equals(groupTitle) &
+              t.streamType.equals(streamType)))
+        .getSingleOrNull();
+  }
+
+  Future<void> upsertCategoryPreference(CategoryPreferencesCompanion entry) =>
+      into(categoryPreferences).insertOnConflictUpdate(entry);
+
+  Future<void> hideCategory(String providerId, String groupTitle, String streamType, bool hidden) async {
+    final existing = await getCategoryPreference(providerId, groupTitle, streamType);
+    await upsertCategoryPreference(CategoryPreferencesCompanion.insert(
+      providerId: providerId,
+      groupTitle: groupTitle,
+      streamType: streamType,
+      hidden: Value(hidden),
+      parentalLocked: existing != null ? Value(existing.parentalLocked) : const Value(false),
+      isFavourite: existing != null ? Value(existing.isFavourite) : const Value(false),
+    ));
+  }
+
+  Future<void> setCategoryParentalLock(String providerId, String groupTitle, String streamType, bool locked) async {
+    final existing = await getCategoryPreference(providerId, groupTitle, streamType);
+    await upsertCategoryPreference(CategoryPreferencesCompanion.insert(
+      providerId: providerId,
+      groupTitle: groupTitle,
+      streamType: streamType,
+      hidden: existing != null ? Value(existing.hidden) : const Value(false),
+      parentalLocked: Value(locked),
+      isFavourite: existing != null ? Value(existing.isFavourite) : const Value(false),
+    ));
+  }
+
+  Future<void> setCategoryFavourite(String providerId, String groupTitle, String streamType, bool favourite) async {
+    final existing = await getCategoryPreference(providerId, groupTitle, streamType);
+    await upsertCategoryPreference(CategoryPreferencesCompanion.insert(
+      providerId: providerId,
+      groupTitle: groupTitle,
+      streamType: streamType,
+      hidden: existing != null ? Value(existing.hidden) : const Value(false),
+      parentalLocked: existing != null ? Value(existing.parentalLocked) : const Value(false),
+      isFavourite: Value(favourite),
+    ));
+  }
+
+  Future<List<CategoryPreference>> getFavoriteCategories() =>
+      (select(categoryPreferences)..where((t) => t.isFavourite.equals(true))).get();
+
+  // --- Watch History ---
+
+  Future<WatchHistoryData?> getWatchHistoryForChannel(String channelId) =>
+      (select(watchHistory)..where((t) => t.channelId.equals(channelId)))
+          .getSingleOrNull();
+
+  Future<void> upsertWatchHistory(
+      String channelId, int positionSeconds, int durationSeconds) =>
+      into(watchHistory).insertOnConflictUpdate(WatchHistoryCompanion.insert(
+        channelId: channelId,
+        positionSeconds: Value(positionSeconds),
+        durationSeconds: Value(durationSeconds),
+        updatedAt: Value(DateTime.now()),
+      ));
+
+  /// Get recently watched channels (sorted by most recent) for a stream type.
+  Future<List<Channel>> getRecentlyWatched(String streamType,
+      {int limit = 20}) async {
+    final history = await (select(watchHistory)
+          ..orderBy([(t) => OrderingTerm.desc(t.updatedAt)])
+          ..limit(limit * 3))
+        .get();
+    if (history.isEmpty) return [];
+    final ids = history.map((h) => h.channelId).toList();
+    final chans = await (select(channels)
+          ..where((t) =>
+              t.id.isIn(ids) &
+              t.streamType.equals(streamType) &
+              t.hidden.equals(false)))
+        .get();
+    // Sort by history order
+    final idOrder = {for (var i = 0; i < ids.length; i++) ids[i]: i};
+    chans.sort((a, b) =>
+        (idOrder[a.id] ?? 999).compareTo(idOrder[b.id] ?? 999));
+    return chans.take(limit).toList();
+  }
+
+  /// Get channels added most recently (by rowid) for a stream type.
+  Future<List<Channel>> getLatestAdded(String streamType, {int limit = 40}) =>
+      (select(channels)
+            ..where((t) =>
+                t.streamType.equals(streamType) & t.hidden.equals(false))
+            ..orderBy([(t) => OrderingTerm.desc(t.sortOrder)])
+            ..limit(limit))
+          .get();
+
+  /// Get channels for provider+group+type, respecting hidden/locked state.
+  Future<List<Channel>> getChannelsForCategory({
+    required String providerId,
+    required String groupTitle,
+    required String streamType,
+    bool includeHidden = false,
+  }) =>
+      (select(channels)
+            ..where((t) =>
+                t.providerId.equals(providerId) &
+                t.groupTitle.equals(groupTitle) &
+                t.streamType.equals(streamType) &
+                (includeHidden ? const Constant(true) : t.hidden.equals(false))))
+          .get();
 
   // --- Channel queries ---
 
   Future<List<Channel>> getChannelsForProvider(String providerId) =>
       (select(channels)..where((t) => t.providerId.equals(providerId))).get();
+      
+  Future<List<Channel>> getChannelsForProviderType(String providerId, String streamType) =>
+      (select(channels)..where((t) => t.providerId.equals(providerId) & t.streamType.equals(streamType))).get();
 
   Future<List<Channel>> getChannelsByIds(Set<String> ids) =>
       (select(channels)..where((t) => t.id.isIn(ids))).get();
 
-  /// Get distinct group names per provider without loading channel objects.
-  Future<Map<String, List<String>>> getProviderGroups() async {
+  /// Get distinct group names per provider for a given stream type without loading channel objects.
+  Future<Map<String, List<String>>> getProviderGroups(String streamType) async {
     final rows = await customSelect(
       'SELECT DISTINCT provider_id, group_title FROM channels '
       'WHERE group_title IS NOT NULL AND group_title != \'\' '
+      'AND stream_type = ? '
       'ORDER BY provider_id, group_title',
+      variables: [Variable.withString(streamType)],
     ).get();
     final result = <String, List<String>>{};
     for (final row in rows) {
@@ -98,6 +252,9 @@ class AppDatabase extends _$AppDatabase {
 
   Future<List<Channel>> getFavoriteChannels() =>
       (select(channels)..where((t) => t.favorite.equals(true))).get();
+
+  Future<List<Channel>> getHiddenOrLockedChannels() =>
+      (select(channels)..where((t) => t.hidden.equals(true) | t.parentalLocked.equals(true))).get();
 
   Future<void> upsertChannels(List<ChannelsCompanion> entries) async {
     await batch((b) {

@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/pin_dialog.dart';
+import '../../data/services/parental_control_service.dart';
 /// 10-foot TV UI shell — optimized for remote control navigation.
 ///
 /// Key design principles:
@@ -10,120 +13,321 @@ import 'package:go_router/go_router.dart';
 /// - D-pad focus navigation (no pointer/mouse needed)
 /// - Sidebar navigation with content area
 /// - Focus ring visible on all interactive elements
-class TvShell extends StatefulWidget {
-  final Widget child;
+class TvShell extends ConsumerStatefulWidget {
+  final StatefulNavigationShell navigationShell;
 
-  const TvShell({super.key, required this.child});
+  const TvShell({super.key, required this.navigationShell});
 
   @override
-  State<TvShell> createState() => _TvShellState();
+  ConsumerState<TvShell> createState() => _TvShellState();
 }
 
-class _TvShellState extends State<TvShell> {
-  int _selectedNav = 0;
-  bool _sidebarFocused = false;
+class _TvShellState extends ConsumerState<TvShell> {
+  final _navScopeNode = FocusScopeNode(debugLabel: 'tv-shell-nav');
+  final _contentScopeNode = FocusScopeNode(debugLabel: 'tv-shell-content');
+
+  @override
+  void dispose() {
+    _navScopeNode.dispose();
+    _contentScopeNode.dispose();
+    super.dispose();
+  }
 
   static const _navItems = [
-    _NavItem(icon: Icons.live_tv_rounded, label: 'Live TV', route: '/'),
-    _NavItem(icon: Icons.calendar_view_week_rounded, label: 'Guide', route: '/guide'),
-    _NavItem(icon: Icons.dns_rounded, label: 'Providers', route: '/providers'),
-    _NavItem(icon: Icons.link_rounded, label: 'EPG Map', route: '/epg-mapping'),
-    _NavItem(icon: Icons.settings_rounded, label: 'Settings', route: '/settings'),
+    _NavItem(icon: Icons.video_library_rounded, label: 'LIBRARY', route: '/library'),
+    _NavItem(icon: Icons.live_tv_rounded, label: 'LIVE TV', route: '/live'),
+    _NavItem(icon: Icons.movie_creation_rounded, label: 'MOVIES', route: '/movies'),
+    _NavItem(icon: Icons.video_collection_rounded, label: 'SERIES', route: '/series'),
+    _NavItem(icon: Icons.security_rounded, label: 'PARENTAL', route: '/parental'),
   ];
+  
+  int get _selectedNav {
+    return widget.navigationShell.currentIndex;
+  }
 
-  void _navigateTo(int index) {
+  void _navigateTo(int index) async {
     if (index == _selectedNav) return;
-    setState(() => _selectedNav = index);
-    context.go(_navItems[index].route);
+    
+    final item = _navItems[index];
+    if (item.route == '/parental') {
+      final pinSvc = await ref.read(parentalControlProvider.future);
+      if (pinSvc.isPinSet) {
+        final entered = await showPinDialog(
+          context,
+          title: 'Enter PIN',
+          subtitle: 'This section is protected by Parental Controls',
+        );
+        if (entered == null || !pinSvc.verifyPin(entered)) {
+          // Focus back on current tab
+          return;
+        }
+      }
+    }
+
+    widget.navigationShell.goBranch(
+      index,
+      initialLocation: index == widget.navigationShell.currentIndex,
+    );
+  }
+
+  String _formatDate() {
+    final now = DateTime.now();
+    final months = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE', 'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'];
+    final days = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
+    
+    final dayStr = days[now.weekday - 1];
+    final monthStr = months[now.month - 1];
+    return '$dayStr, $monthStr ${now.day}, ${now.year}';
+  }
+
+  String _formatTime() {
+    final now = DateTime.now();
+    var h = now.hour;
+    h = h % 12;
+    if (h == 0) h = 12;
+    final m = now.minute.toString().padLeft(2, '0');
+    return '$h:$m';
+  }
+
+  String _formatAmPm() {
+    final now = DateTime.now();
+    return now.hour >= 12 ? 'PM' : 'AM';
   }
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        // Sidebar nav — uses FocusTraversalGroup so D-pad stays within sidebar
-        FocusTraversalGroup(
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            width: _sidebarFocused ? 200 : 64,
-            color: const Color(0xFF0D0D14),
-            child: Column(
-              children: [
-                const SizedBox(height: 24),
-                // Logo
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: _sidebarFocused
-                      ? const Text(
-                          'clubTivi',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF6C5CE7),
-                          ),
-                        )
-                      : const Icon(
-                          Icons.live_tv_rounded,
-                          color: Color(0xFF6C5CE7),
-                          size: 28,
-                        ),
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (didPop) async {
+        if (didPop) return;
+        
+        final shouldPop = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            backgroundColor: const Color(0xFF1A1A2E),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            title: const Text('Exit App', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+            content: const Text('Are you sure you want to exit ClubTivi?', style: TextStyle(color: Colors.white70, fontSize: 18)),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('NO', style: TextStyle(color: Colors.white54, fontSize: 18)),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF00BCD4),
+                  foregroundColor: Colors.white,
                 ),
-                const SizedBox(height: 32),
-                // Nav items — each wrapped in Focus for D-pad
-                ...List.generate(_navItems.length, (index) {
-                  final item = _navItems[index];
-                  final selected = _selectedNav == index;
-                  return _TvNavButton(
-                    icon: item.icon,
-                    label: item.label,
-                    selected: selected,
-                    expanded: _sidebarFocused,
-                    autofocus: index == 0,
-                    onSelect: () => _navigateTo(index),
-                    onFocusChange: (hasFocus) {
-                      if (hasFocus) {
-                        setState(() => _sidebarFocused = true);
-                      }
-                    },
-                  );
-                }),
-              ],
-            ),
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('YES', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        );
+        
+        if (shouldPop == true) {
+          SystemNavigator.pop();
+        }
+      },
+      child: Material(
+        type: MaterialType.transparency,
+        child: Focus(
+        onKeyEvent: (node, event) {
+          if (event is! KeyDownEvent) return KeyEventResult.ignored;
+          // If up arrow is pressed, check if we can move up within the content first
+          if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+            if (!_navScopeNode.hasFocus) {
+              final pf = FocusManager.instance.primaryFocus;
+              if (pf != null) {
+                final moved = pf.focusInDirection(TraversalDirection.up);
+                if (moved) return KeyEventResult.handled;
+              }
+              // If no widget to the up, jump to the top nav
+              _navScopeNode.requestFocus();
+              if (FocusManager.instance.primaryFocus == _navScopeNode) {
+                _navScopeNode.nextFocus();
+              }
+              return KeyEventResult.handled;
+            }
+          } else if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+            if (_navScopeNode.hasFocus) {
+              final pf = FocusManager.instance.primaryFocus;
+              if (pf != null) {
+                final moved = pf.focusInDirection(TraversalDirection.down);
+                if (moved) return KeyEventResult.handled;
+              }
+              // Force focus to content
+              _contentScopeNode.requestFocus();
+              if (FocusManager.instance.primaryFocus == _contentScopeNode) {
+                _contentScopeNode.nextFocus();
+              }
+              return KeyEventResult.handled;
+            }
+          } else if (event.logicalKey == LogicalKeyboardKey.escape ||
+              event.logicalKey == LogicalKeyboardKey.goBack ||
+              event.logicalKey == LogicalKeyboardKey.browserBack) {
+            if (!_navScopeNode.hasFocus) {
+              _navScopeNode.requestFocus();
+              return KeyEventResult.handled;
+            }
+          }
+          return KeyEventResult.ignored;
+        },
+        child: FocusTraversalGroup(
+          policy: ReadingOrderTraversalPolicy(),
+          child: Stack(
+            children: [
+              // Main content area
+              Positioned.fill(
+                child: FocusScope(
+                  node: _contentScopeNode,
+                  child: FocusTraversalGroup(
+                    child: widget.navigationShell,
+                  ),
+                ),
+              ),
+              // Top nav
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: Container(
+                  height: 64,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.black.withValues(alpha: 0.8),
+                        Colors.black.withValues(alpha: 0.0),
+                      ],
+                    ),
+                  ),
+                  child: FocusScope(
+                    node: _navScopeNode,
+                    child: Row(
+                      children: [
+                        const SizedBox(width: 32),
+                        Expanded(
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.start,
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                ...List.generate(_navItems.length, (index) {
+                                  final item = _navItems[index];
+                                  final selected = _selectedNav == index;
+                                  return _TvNavButton(
+                                    label: item.label,
+                                    selected: selected,
+                                    autofocus: index == 0,
+                                    onSelect: () => _navigateTo(index),
+                                    onFocusChange: (hasFocus) {},
+                                  );
+                                }),
+                              ],
+                            ),
+                          ),
+                        ),
+                        // Search and Settings Icons
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _TvIconNavButton(
+                              icon: Icons.search_rounded,
+                              onSelect: () {
+                                if (GoRouterState.of(context).uri.path == '/search') return;
+                                context.push('/search');
+                              },
+                              onFocusChange: (hasFocus) {},
+                            ),
+                            const SizedBox(width: 8),
+                            _TvIconNavButton(
+                              icon: Icons.settings_rounded,
+                              onSelect: () {
+                                if (GoRouterState.of(context).uri.path == '/settings') return;
+                                context.push('/settings');
+                              },
+                              onFocusChange: (hasFocus) {},
+                            ),
+                            const SizedBox(width: 24),
+                          ],
+                        ),
+                        // Clock on the far right
+                        Padding(
+                          padding: const EdgeInsets.only(right: 32),
+                          child: SizedBox(
+                            width: 180,
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.end,
+                                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                                  textBaseline: TextBaseline.alphabetic,
+                                  children: [
+                                    Text(
+                                      _formatTime().split(':').first + ':',
+                                      style: const TextStyle(
+                                        color: Colors.cyan,
+                                        fontSize: 24,
+                                        fontWeight: FontWeight.w300,
+                                      ),
+                                    ),
+                                    Text(
+                                      _formatTime().split(':')[1],
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 24,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                Text(
+                                  '${_formatDate()} • ${_formatAmPm()}',
+                                  textAlign: TextAlign.right,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: Colors.white54,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600,
+                                    letterSpacing: 1.2,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
-        // Content area — separate FocusTraversalGroup
-        Expanded(
-          child: FocusTraversalGroup(
-            child: Focus(
-              onFocusChange: (hasFocus) {
-                if (hasFocus) {
-                  setState(() => _sidebarFocused = false);
-                }
-              },
-              canRequestFocus: false,
-              child: widget.child,
-            ),
-          ),
-        ),
-      ],
+      ),
+      ),
     );
   }
 }
 
+
 class _TvNavButton extends StatefulWidget {
-  final IconData icon;
   final String label;
   final bool selected;
-  final bool expanded;
   final bool autofocus;
   final VoidCallback onSelect;
   final ValueChanged<bool> onFocusChange;
 
   const _TvNavButton({
-    required this.icon,
     required this.label,
     required this.selected,
-    required this.expanded,
     this.autofocus = false,
     required this.onSelect,
     required this.onFocusChange,
@@ -140,69 +344,117 @@ class _TvNavButtonState extends State<_TvNavButton> {
   Widget build(BuildContext context) {
     final isHighlighted = widget.selected || _focused;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      child: Focus(
-        autofocus: widget.autofocus,
-        onFocusChange: (hasFocus) {
-          setState(() => _focused = hasFocus);
-          widget.onFocusChange(hasFocus);
-        },
-        onKeyEvent: (node, event) {
-          if (event is KeyDownEvent &&
-              (event.logicalKey == LogicalKeyboardKey.select ||
-                  event.logicalKey == LogicalKeyboardKey.enter ||
-                  event.logicalKey == LogicalKeyboardKey.gameButtonA)) {
-            widget.onSelect();
-            return KeyEventResult.handled;
+    return Focus(
+      autofocus: widget.autofocus,
+      onFocusChange: (hasFocus) {
+        setState(() => _focused = hasFocus);
+        widget.onFocusChange(hasFocus);
+      },
+      onKeyEvent: (node, event) {
+        if (event is KeyDownEvent &&
+            (event.logicalKey == LogicalKeyboardKey.select ||
+                event.logicalKey == LogicalKeyboardKey.enter ||
+                event.logicalKey == LogicalKeyboardKey.gameButtonA)) {
+          widget.onSelect();
+          return KeyEventResult.handled;
+        }
+        if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.arrowUp) {
+          final pf = FocusManager.instance.primaryFocus;
+          if (pf != null) {
+            final moved = pf.focusInDirection(TraversalDirection.up);
+            if (moved) return KeyEventResult.handled;
           }
-          return KeyEventResult.ignored;
-        },
-        child: GestureDetector(
-          onTap: widget.onSelect,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 150),
-            height: 48,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: BoxDecoration(
-              color: isHighlighted
-                  ? const Color(0xFF6C5CE7).withValues(alpha: 0.2)
-                  : Colors.transparent,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: _focused
-                    ? const Color(0xFF6C5CE7)
-                    : Colors.transparent,
-                width: 2,
-              ),
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      },
+      child: GestureDetector(
+        onTap: widget.onSelect,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: _focused ? Colors.white : Colors.transparent,
+              width: 2,
             ),
-            child: Row(
-              children: [
-                Icon(
-                  widget.icon,
-                  color: isHighlighted
-                      ? const Color(0xFF6C5CE7)
-                      : Colors.white54,
-                  size: 24,
-                ),
-                if (widget.expanded) ...[
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      widget.label,
-                      style: TextStyle(
-                        color: isHighlighted ? Colors.white : Colors.white54,
-                        fontSize: 15,
-                        fontWeight: isHighlighted
-                            ? FontWeight.w600
-                            : FontWeight.normal,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ],
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            widget.label,
+            style: TextStyle(
+              color: widget.selected 
+                  ? Colors.white 
+                  : (_focused ? Colors.white70 : Colors.white54),
+              fontSize: 16,
+              fontWeight: _focused ? FontWeight.w600 : FontWeight.w400,
+              letterSpacing: 1.2,
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TvIconNavButton extends StatefulWidget {
+  final IconData icon;
+  final VoidCallback onSelect;
+  final ValueChanged<bool> onFocusChange;
+
+  const _TvIconNavButton({
+    required this.icon,
+    required this.onSelect,
+    required this.onFocusChange,
+  });
+
+  @override
+  State<_TvIconNavButton> createState() => _TvIconNavButtonState();
+}
+
+class _TvIconNavButtonState extends State<_TvIconNavButton> {
+  bool _focused = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Focus(
+      onFocusChange: (hasFocus) {
+        setState(() => _focused = hasFocus);
+        widget.onFocusChange(hasFocus);
+      },
+      onKeyEvent: (node, event) {
+        if (event is KeyDownEvent &&
+            (event.logicalKey == LogicalKeyboardKey.select ||
+                event.logicalKey == LogicalKeyboardKey.enter ||
+                event.logicalKey == LogicalKeyboardKey.gameButtonA)) {
+          widget.onSelect();
+          return KeyEventResult.handled;
+        }
+        if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.arrowUp) {
+          final pf = FocusManager.instance.primaryFocus;
+          if (pf != null) {
+            final moved = pf.focusInDirection(TraversalDirection.up);
+            if (moved) return KeyEventResult.handled;
+          }
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      },
+      child: GestureDetector(
+        onTap: widget.onSelect,
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: _focused ? Colors.white24 : Colors.transparent,
+            border: Border.all(
+              color: _focused ? Colors.white : Colors.transparent,
+              width: 2,
+            ),
+          ),
+          child: Icon(
+            widget.icon,
+            color: _focused ? Colors.white : Colors.white54,
+            size: 24,
           ),
         ),
       ),
@@ -268,7 +520,7 @@ class _TvFocusCardState extends State<TvFocusCard> {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: _focused ? const Color(0xFF6C5CE7) : Colors.transparent,
+            color: _focused ? Colors.white : Colors.transparent,
             width: 2,
           ),
           color: const Color(0xFF1A1A2E),

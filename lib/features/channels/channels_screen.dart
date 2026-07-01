@@ -18,7 +18,7 @@ import '../../core/fuzzy_match.dart';
 import '../../core/platform_info.dart';
 import '../../core/weather_clock_widget.dart';
 import '../../data/datasources/local/database.dart' as db;
-import '../../data/datasources/remote/tmdb_client.dart';
+import '../../data/datasources/remote/cinemeta_client.dart';
 import '../../data/services/app_update_service.dart';
 import '../../data/services/epg_refresh_service.dart';
 import '../../data/services/stream_alternatives_service.dart';
@@ -205,8 +205,6 @@ class _ChannelsScreenState extends ConsumerState<ChannelsScreen> {
     _channelsSub = database.select(database.channels).watch().listen((_) => debouncedReload());
     // Refresh now-playing every 60 seconds so the info panel stays current
     _nowPlayingTimer = Timer.periodic(const Duration(seconds: 60), (_) => _refreshNowPlaying());
-    // Check for app updates after a short delay so the UI loads first
-    Future.delayed(const Duration(seconds: 3), _checkForUpdateOnStartup);
   }
 
   Future<void> _checkForUpdateOnStartup() async {
@@ -611,7 +609,7 @@ class _ChannelsScreenState extends ConsumerState<ChannelsScreen> {
     // ── Background: sidebar groups + failover groups (non-blocking) ──
     if (mounted) setState(() => _loadStatus = 'Loading Smart Channel groups…');
     final bgResults = await Future.wait([
-      database.getProviderGroups(),
+      database.getProviderGroups('live'),
       database.getAllFailoverGroups(),
     ]);
     final pGroups = bgResults[0] as Map<String, List<String>>;
@@ -1212,11 +1210,11 @@ class _ChannelsScreenState extends ConsumerState<ChannelsScreen> {
     _imdbIdCache[key] = null; // mark in-progress
     try {
       final keys = ref.read(showsApiKeysProvider);
-      if (!keys.hasTmdbKey) return;
-      final tmdb = TmdbClient(apiKey: keys.tmdbApiKey);
-      final results = await tmdb.searchTv(title);
+      
+      final cinemeta = CinemetaClient();
+      final results = await cinemeta.searchTv(title);
       if (results.isEmpty) return;
-      final detail = await tmdb.getTvShow(results.first.id);
+      final detail = await cinemeta.getTvShow(results.first.id);
       if (detail.imdbId != null && detail.imdbId!.isNotEmpty) {
         _imdbIdCache[key] = detail.imdbId;
         if (mounted) setState(() {});
@@ -1372,12 +1370,10 @@ class _ChannelsScreenState extends ConsumerState<ChannelsScreen> {
 
     return PopScope(
       canPop: false,
-      child: FocusTraversalGroup(
-        policy: ReadingOrderTraversalPolicy(),
-        child: Focus(
-          focusNode: _focusNode,
-          autofocus: !Platform.isAndroid,
-          skipTraversal: Platform.isAndroid,
+      child: Focus(
+        focusNode: _focusNode,
+        autofocus: !Platform.isAndroid,
+        skipTraversal: Platform.isAndroid,
           onKeyEvent: (node, event) {
             if (event is! KeyDownEvent) return KeyEventResult.ignored;
             if (_searchFocusNode.hasFocus) return KeyEventResult.ignored;
@@ -1448,7 +1444,6 @@ class _ChannelsScreenState extends ConsumerState<ChannelsScreen> {
                 ],
               ),
             ),
-          ),
         ),
       ),
     );
@@ -2135,7 +2130,7 @@ class _ChannelsScreenState extends ConsumerState<ChannelsScreen> {
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: active ? Colors.white.withValues(alpha: 0.08) : Colors.transparent,
-                  border: hasFocus ? Border.all(color: Colors.purpleAccent, width: 1.5) : null,
+                  border: hasFocus ? Border.all(color: Colors.white, width: 1.5) : null,
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Icon(icon, size: 18, color: active ? Colors.white : Colors.white38),
@@ -2171,7 +2166,7 @@ class _ChannelsScreenState extends ConsumerState<ChannelsScreen> {
               height: 36,
               padding: const EdgeInsets.symmetric(horizontal: 12),
               decoration: BoxDecoration(
-                border: hasFocus ? Border.all(color: Colors.purpleAccent, width: 1.5) : null,
+                border: hasFocus ? Border.all(color: Colors.white, width: 1.5) : null,
                 borderRadius: BorderRadius.circular(4),
               ),
               child: Row(
@@ -2350,7 +2345,7 @@ class _ChannelsScreenState extends ConsumerState<ChannelsScreen> {
                 },
                 child: Container(
                   decoration: BoxDecoration(
-                    border: hasFocus ? Border.all(color: Colors.purpleAccent, width: 1.5) : null,
+                    border: hasFocus ? Border.all(color: Colors.white, width: 1.5) : null,
                     borderRadius: BorderRadius.circular(4),
                   ),
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
@@ -2579,7 +2574,7 @@ class _ChannelsScreenState extends ConsumerState<ChannelsScreen> {
                 padding: EdgeInsets.only(left: 12.0 + (indent * 16.0), right: 8),
                 decoration: BoxDecoration(
                   color: isSelected ? Colors.white.withValues(alpha: 0.1) : Colors.transparent,
-                  border: hasFocus ? Border.all(color: Colors.purpleAccent, width: 1.5) : null,
+                  border: hasFocus ? Border.all(color: Colors.white, width: 1.5) : null,
                   borderRadius: BorderRadius.circular(4),
                 ),
                 alignment: Alignment.centerLeft,
@@ -2669,6 +2664,7 @@ class _ChannelsScreenState extends ConsumerState<ChannelsScreen> {
     }
 
     final listWidget = ListView.builder(
+      clipBehavior: Clip.none,
       controller: _channelListController,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       itemCount: _filteredChannels.length + (failoverGroupWidgets.isNotEmpty ? failoverGroupWidgets.length + 1 : 0),
@@ -3306,8 +3302,7 @@ class _ChannelsScreenState extends ConsumerState<ChannelsScreen> {
   }
 
   Widget _buildMultiSelectBar() {
-    return FocusTraversalGroup(
-      child: Container(
+    return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
         color: const Color(0xFF1A1A2E),
@@ -3381,7 +3376,7 @@ class _ChannelsScreenState extends ConsumerState<ChannelsScreen> {
           ),
         ],
       ),
-      ),
+
     );
   }
 
@@ -4680,6 +4675,7 @@ class _ChannelsScreenState extends ConsumerState<ChannelsScreen> {
                 return Stack(
                   children: [
                     ListView.builder(
+                      clipBehavior: Clip.none,
                       itemCount: _filteredChannels.length + _guideFailoverGroupCount,
                       itemBuilder: (context, index) {
                         // Inject failover group rows at the top

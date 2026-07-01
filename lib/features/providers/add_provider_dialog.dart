@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
+import 'package:file_picker/file_picker.dart';
 import 'provider_manager.dart';
 
 /// Shows the Add Provider dialog.
@@ -71,7 +71,7 @@ class _AddProviderPageState extends ConsumerState<_AddProviderPage> {
 
   String? _validateUrl(String? value) {
     if (value == null || value.trim().isEmpty) return 'Required';
-    if (!value.trim().startsWith('http')) return 'URL must start with http';
+    if (!value.trim().startsWith('http') && !value.trim().startsWith('/')) return 'Must be a valid URL or file path';
     return null;
   }
 
@@ -168,9 +168,7 @@ class _AddProviderPageState extends ConsumerState<_AddProviderPage> {
           });
         },
       },
-      child: Focus(
-        autofocus: true,
-        child: Scaffold(
+      child: Scaffold(
       backgroundColor: const Color(0xFF0A0A0F),
       appBar: AppBar(
         leading: IconButton(
@@ -184,28 +182,54 @@ class _AddProviderPageState extends ConsumerState<_AddProviderPage> {
         child: ListView(
           padding: const EdgeInsets.all(20),
           children: [
-            // Provider type dropdown — D-pad navigable as a form field
-            DropdownButtonFormField<_ProviderType>(
-              value: _type,
-              autofocus: true,
-              decoration: const InputDecoration(
-                labelText: 'Provider Type',
-                prefixIcon: Icon(Icons.live_tv),
-              ),
-              dropdownColor: const Color(0xFF1A1A2E),
-              items: const [
-                DropdownMenuItem(
-                  value: _ProviderType.m3u,
-                  child: Text('M3U Playlist'),
+            // Provider type selection - D-pad friendly
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton(
+                    autofocus: true,
+                    style: ButtonStyle(
+                      backgroundColor: WidgetStateProperty.resolveWith((states) {
+                        if (states.contains(WidgetState.focused)) {
+                          return const Color(0xFF8C7CFF);
+                        }
+                        return _type == _ProviderType.m3u ? const Color(0xFF6C5CE7) : const Color(0xFF1A1A2E);
+                      }),
+                      foregroundColor: WidgetStateProperty.all(Colors.white),
+                      side: WidgetStateProperty.resolveWith((states) {
+                        if (states.contains(WidgetState.focused)) {
+                          return const BorderSide(color: Colors.white, width: 3);
+                        }
+                        return BorderSide.none;
+                      }),
+                    ),
+                    onPressed: () => setState(() => _type = _ProviderType.m3u),
+                    child: const Text('M3U Playlist'),
+                  ),
                 ),
-                DropdownMenuItem(
-                  value: _ProviderType.xtream,
-                  child: Text('Xtream Codes'),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: ElevatedButton(
+                    style: ButtonStyle(
+                      backgroundColor: WidgetStateProperty.resolveWith((states) {
+                        if (states.contains(WidgetState.focused)) {
+                          return const Color(0xFF8C7CFF);
+                        }
+                        return _type == _ProviderType.xtream ? const Color(0xFF6C5CE7) : const Color(0xFF1A1A2E);
+                      }),
+                      foregroundColor: WidgetStateProperty.all(Colors.white),
+                      side: WidgetStateProperty.resolveWith((states) {
+                        if (states.contains(WidgetState.focused)) {
+                          return const BorderSide(color: Colors.white, width: 3);
+                        }
+                        return BorderSide.none;
+                      }),
+                    ),
+                    onPressed: () => setState(() => _type = _ProviderType.xtream),
+                    child: const Text('Xtream Codes'),
+                  ),
                 ),
               ],
-              onChanged: (v) {
-                if (v != null) setState(() => _type = v);
-              },
             ),
             const SizedBox(height: 24),
             // Fields change based on type
@@ -217,13 +241,12 @@ class _AddProviderPageState extends ConsumerState<_AddProviderPage> {
         ),
       ),
     ),
-    ),
     );
   }
 
   List<Widget> _buildM3uFields() {
     return [
-      TextFormField(
+      TvTextField(
         controller: _m3uName,
         decoration: const InputDecoration(
           labelText: 'Provider Name',
@@ -233,7 +256,7 @@ class _AddProviderPageState extends ConsumerState<_AddProviderPage> {
         textInputAction: TextInputAction.next,
       ),
       const SizedBox(height: 16),
-      TextFormField(
+      TvTextField(
         controller: _m3uUrl,
         decoration: const InputDecoration(
           labelText: 'M3U URL',
@@ -245,20 +268,35 @@ class _AddProviderPageState extends ConsumerState<_AddProviderPage> {
         onFieldSubmitted: (_) => _submit(),
       ),
       const SizedBox(height: 8),
-      Align(
-        alignment: Alignment.centerRight,
-        child: TextButton.icon(
-          onPressed: () => _pasteUrl(_m3uUrl),
-          icon: const Icon(Icons.paste, size: 18),
-          label: const Text('Paste URL'),
-        ),
+      Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          TextButton.icon(
+            onPressed: () async {
+              final result = await FilePicker.platform.pickFiles(
+                type: FileType.any, // .m3u might not be recognized on all Android versions
+              );
+              if (result != null && result.files.single.path != null) {
+                _m3uUrl.text = result.files.single.path!;
+              }
+            },
+            icon: const Icon(Icons.folder, size: 18),
+            label: const Text('Browse File'),
+          ),
+          const SizedBox(width: 8),
+          TextButton.icon(
+            onPressed: () => _pasteUrl(_m3uUrl),
+            icon: const Icon(Icons.paste, size: 18),
+            label: const Text('Paste URL'),
+          ),
+        ],
       ),
     ];
   }
 
   List<Widget> _buildXtreamFields() {
     return [
-      TextFormField(
+      TvTextField(
         controller: _xtreamName,
         decoration: const InputDecoration(
           labelText: 'Provider Name',
@@ -268,7 +306,7 @@ class _AddProviderPageState extends ConsumerState<_AddProviderPage> {
         textInputAction: TextInputAction.next,
       ),
       const SizedBox(height: 16),
-      TextFormField(
+      TvTextField(
         controller: _xtreamUrl,
         decoration: const InputDecoration(
           labelText: 'Server URL',
@@ -279,7 +317,7 @@ class _AddProviderPageState extends ConsumerState<_AddProviderPage> {
         textInputAction: TextInputAction.next,
       ),
       const SizedBox(height: 16),
-      TextFormField(
+      TvTextField(
         controller: _xtreamUser,
         decoration: const InputDecoration(
           labelText: 'Username',
@@ -288,7 +326,7 @@ class _AddProviderPageState extends ConsumerState<_AddProviderPage> {
         textInputAction: TextInputAction.next,
       ),
       const SizedBox(height: 16),
-      TextFormField(
+      TvTextField(
         controller: _xtreamPass,
         decoration: const InputDecoration(
           labelText: 'Password',
@@ -318,6 +356,136 @@ class _AddProviderPageState extends ConsumerState<_AddProviderPage> {
                 ),
               )
             : const Text('Add Provider', style: TextStyle(fontSize: 16)),
+      ),
+    );
+  }
+}
+
+class TvTextField extends StatefulWidget {
+  final TextEditingController? controller;
+  final InputDecoration? decoration;
+  final FormFieldValidator<String>? validator;
+  final TextInputType? keyboardType;
+  final TextInputAction? textInputAction;
+  final bool obscureText;
+  final ValueChanged<String>? onFieldSubmitted;
+
+  const TvTextField({
+    super.key,
+    this.controller,
+    this.decoration,
+    this.validator,
+    this.keyboardType,
+    this.textInputAction,
+    this.obscureText = false,
+    this.onFieldSubmitted,
+  });
+
+  @override
+  State<TvTextField> createState() => _TvTextFieldState();
+}
+
+class _TvTextFieldState extends State<TvTextField> {
+  bool _isEditing = false;
+  bool _hasFocus = false;
+  late FocusNode _outerFocusNode;
+  late FocusNode _innerFocusNode;
+  late FocusNode _disabledFocusNode;
+
+  @override
+  void initState() {
+    super.initState();
+    _outerFocusNode = FocusNode();
+    _innerFocusNode = FocusNode();
+    _disabledFocusNode = FocusNode(canRequestFocus: false);
+
+    _outerFocusNode.addListener(() {
+      setState(() {
+        _hasFocus = _outerFocusNode.hasFocus;
+      });
+    });
+
+    _innerFocusNode.addListener(() {
+      if (!_innerFocusNode.hasFocus && _isEditing) {
+        setState(() => _isEditing = false);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _outerFocusNode.dispose();
+    _innerFocusNode.dispose();
+    _disabledFocusNode.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isEditing) {
+      return TextFormField(
+        controller: widget.controller,
+        focusNode: _innerFocusNode,
+        autofocus: true,
+        readOnly: false,
+        decoration: widget.decoration,
+        validator: widget.validator,
+        keyboardType: widget.keyboardType,
+        textInputAction: widget.textInputAction,
+        obscureText: widget.obscureText,
+        onFieldSubmitted: (val) {
+          setState(() => _isEditing = false);
+          _outerFocusNode.requestFocus();
+          widget.onFieldSubmitted?.call(val);
+        },
+      );
+    }
+
+    return Focus(
+      focusNode: _outerFocusNode,
+      onKeyEvent: (node, event) {
+        if (event is KeyDownEvent &&
+            (event.logicalKey == LogicalKeyboardKey.select ||
+                event.logicalKey == LogicalKeyboardKey.enter)) {
+          setState(() => _isEditing = true);
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      },
+      child: GestureDetector(
+        onTap: () => setState(() => _isEditing = true),
+        child: Container(
+          decoration: BoxDecoration(
+            color: _hasFocus ? const Color(0xFF6C5CE7).withValues(alpha: 0.3) : Colors.transparent,
+            border: Border.all(
+              color: _hasFocus ? Colors.white : Colors.transparent,
+              width: 3,
+            ),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: IgnorePointer(
+            child: TextFormField(
+              controller: widget.controller,
+              focusNode: _disabledFocusNode,
+              readOnly: true,
+              decoration: widget.decoration?.copyWith(
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              ) ?? const InputDecoration(
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              ),
+              validator: widget.validator,
+              keyboardType: widget.keyboardType,
+              textInputAction: widget.textInputAction,
+              obscureText: widget.obscureText,
+            ),
+          ),
+        ),
       ),
     );
   }

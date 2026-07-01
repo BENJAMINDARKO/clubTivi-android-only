@@ -31,9 +31,7 @@ class ProvidersScreen extends ConsumerWidget {
           });
         },
       },
-      child: Focus(
-        autofocus: true,
-        child: Scaffold(
+      child: Scaffold(
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
@@ -58,8 +56,7 @@ class ProvidersScreen extends ConsumerWidget {
       body: providersAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Error: $e')),
-        data: (providers) => FocusTraversalGroup(
-          child: ListView(
+        data: (providers) => ListView(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             children: [
               if (providers.isNotEmpty) ...[
@@ -77,8 +74,6 @@ class ProvidersScreen extends ConsumerWidget {
           ),
         ),
       ),
-    ),
-    ),
     );
   }
 }
@@ -112,134 +107,123 @@ class _ProviderCard extends ConsumerWidget {
     const accent = Color(0xFF6C5CE7);
     final isXtream = provider.type == 'xtream';
 
-    return Focus(
-      onKeyEvent: (node, event) {
-        if (event is! KeyDownEvent) return KeyEventResult.ignored;
-        if (event.logicalKey == LogicalKeyboardKey.select ||
-            event.logicalKey == LogicalKeyboardKey.enter) {
-          // SELECT on provider card → refresh
-          _refreshProvider(context, ref);
-          return KeyEventResult.handled;
-        }
-        return KeyEventResult.ignored;
-      },
-      child: Builder(
-        builder: (context) {
-          final hasFocus = Focus.of(context).hasFocus;
-          return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      shape: hasFocus
-          ? RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: const BorderSide(color: accent, width: 2),
-            )
-          : null,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Icon(
-              isXtream ? Icons.api_rounded : Icons.playlist_play_rounded,
-              color: accent,
-              size: 36,
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    provider.name,
-                    style: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
+    return Builder(
+      builder: (context) {
+        final hasFocus = Focus.of(context).hasFocus;
+        return Card(
+          margin: const EdgeInsets.only(bottom: 12),
+          shape: hasFocus
+              ? RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: const BorderSide(color: accent, width: 2),
+                )
+              : null,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Icon(
+                  isXtream ? Icons.api_rounded : Icons.playlist_play_rounded,
+                  color: accent,
+                  size: 36,
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: accent.withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          isXtream ? 'Xtream' : 'M3U',
-                          style: const TextStyle(
-                              fontSize: 11, color: accent),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
                       Text(
-                        '— channels',
-                        style: TextStyle(
-                            fontSize: 12, color: Colors.white.withValues(alpha: 0.4)),
+                        provider.name,
+                        style: const TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: accent.withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              isXtream ? 'Xtream' : 'M3U',
+                              style: const TextStyle(
+                                  fontSize: 11, color: accent),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            '— channels',
+                            style: TextStyle(
+                                fontSize: 12, color: Colors.white.withValues(alpha: 0.4)),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                ],
-              ),
-            ),
-            IconButton(
-              icon: const Icon(Icons.refresh_rounded, size: 20),
-              tooltip: 'Refresh',
-              onPressed: () async {
-                final manager = ref.read(providerManagerProvider);
-                try {
-                  final count = await manager.refreshProvider(provider.id);
-                  if (!context.mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Loaded $count channels')),
-                  );
-                } catch (e) {
-                  if (!context.mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Refresh failed: $e')),
-                  );
-                }
-              },
-            ),
-            IconButton(
-              icon: const Icon(Icons.delete_outline_rounded,
-                  size: 20, color: Colors.redAccent),
-              tooltip: 'Delete',
-              onPressed: () async {
-                final confirmed = await showDialog<bool>(
-                  context: context,
-                  builder: (_) => AlertDialog(
-                    backgroundColor: const Color(0xFF1A1A2E),
-                    title: Row(
-                      children: [
-                        const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
-                        const SizedBox(width: 8),
-                        Text(provider.name),
-                      ],
-                    ),
-                    actions: [
-                      IconButton(
-                        icon: const Icon(Icons.close),
-                        onPressed: () => Navigator.pop(context, false),
+                ),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.refresh_rounded, size: 16),
+                  label: const Text('Refresh'),
+                  onPressed: () async {
+                    final manager = ref.read(providerManagerProvider);
+                    try {
+                      final count = await manager.refreshProvider(provider.id);
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Loaded $count channels')),
+                      );
+                    } catch (e) {
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Refresh failed: $e')),
+                      );
+                    }
+                  },
+                ),
+                const SizedBox(width: 8),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.delete_outline_rounded, size: 16, color: Colors.redAccent),
+                  label: const Text('Delete', style: TextStyle(color: Colors.redAccent)),
+                  onPressed: () async {
+                    final confirmed = await showDialog<bool>(
+                      context: context,
+                      builder: (_) => AlertDialog(
+                        backgroundColor: const Color(0xFF1A1A2E),
+                        title: Row(
+                          children: [
+                            const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
+                            const SizedBox(width: 8),
+                            Text(provider.name),
+                          ],
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, false),
+                            child: const Text('Cancel'),
+                          ),
+                          ElevatedButton(
+                            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+                            onPressed: () => Navigator.pop(context, true),
+                            child: const Text('Delete', style: TextStyle(color: Colors.white)),
+                          ),
+                        ],
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.delete_forever, color: Colors.redAccent),
-                        onPressed: () => Navigator.pop(context, true),
-                      ),
-                    ],
-                  ),
-                );
-                if (confirmed == true) {
-                  final manager = ref.read(providerManagerProvider);
-                  await manager.deleteProvider(provider.id);
-                }
-              },
+                    );
+                    if (confirmed == true) {
+                      final manager = ref.read(providerManagerProvider);
+                      await manager.deleteProvider(provider.id);
+                    }
+                  },
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },  // Builder builder
     );
-        },  // Builder builder
-      ),  // Builder
-    );  // Focus
   }
 
   void _refreshProvider(BuildContext context, WidgetRef ref) async {
@@ -370,8 +354,9 @@ class _FreeTvProviderTile extends ConsumerWidget {
               child: Container(
                 decoration: hasFocus
                     ? BoxDecoration(
-                        border: Border.all(color: accent, width: 2),
+                        border: Border.all(color: Colors.white, width: 3),
                         borderRadius: BorderRadius.circular(12),
+                        color: accent.withValues(alpha: 0.3),
                       )
                     : null,
                 child: ListTile(

@@ -1,6 +1,6 @@
 import 'package:logger/logger.dart';
 import '../datasources/remote/trakt_client.dart';
-import '../datasources/remote/tmdb_client.dart';
+import '../datasources/remote/cinemeta_client.dart';
 import '../datasources/remote/debrid_service.dart';
 import '../datasources/remote/torrent_search_client.dart';
 import '../models/show.dart';
@@ -8,23 +8,23 @@ import '../models/show.dart';
 /// Combines Trakt, TMDB, debrid, and torrent search into a unified shows data source
 class ShowsRepository {
   final TraktClient? _trakt;
-  final TmdbClient? _tmdb;
+  final CinemetaClient? _cinemeta;
   final DebridService? _debrid;
   final TorrentSearchClient _torrentSearch;
   final _log = Logger(printer: SimplePrinter());
 
   ShowsRepository({
     TraktClient? trakt,
-    TmdbClient? tmdb,
+    CinemetaClient? tmdb,
     DebridService? debrid,
     TorrentSearchClient? torrentSearch,
   })  : _trakt = trakt,
-        _tmdb = tmdb,
+        _cinemeta = tmdb,
         _debrid = debrid,
         _torrentSearch = torrentSearch ?? TorrentSearchClient();
 
   bool get hasTrakt => _trakt != null;
-  bool get hasTmdb => _tmdb != null;
+  bool get hasCinemeta => true;
   bool get hasDebrid => _debrid != null;
 
   /// Get trending shows, enriched with TMDB posters
@@ -33,8 +33,8 @@ class ShowsRepository {
       final shows = await _trakt.getTrendingShows(page: page, limit: limit);
       return _enrichWithTmdb(shows);
     }
-    if (_tmdb != null) {
-      return _tmdbResultsToShows(await _tmdb.getTrendingTv(page: page), ShowType.show);
+    if (_cinemeta != null) {
+      return _cinemetaResultsToShows(await _cinemeta.getTrendingTv(skip: (page - 1) * 20), ShowType.show);
     }
     return [];
   }
@@ -45,8 +45,8 @@ class ShowsRepository {
       final shows = await _trakt.getPopularShows(page: page, limit: limit);
       return _enrichWithTmdb(shows);
     }
-    if (_tmdb != null) {
-      return _tmdbResultsToShows(await _tmdb.getPopularTv(page: page), ShowType.show);
+    if (_cinemeta != null) {
+      return _cinemetaResultsToShows(await _cinemeta.getPopularTv(skip: (page - 1) * 20), ShowType.show);
     }
     return [];
   }
@@ -57,8 +57,8 @@ class ShowsRepository {
       final shows = await _trakt.getTrendingMovies(page: page, limit: limit);
       return _enrichWithTmdb(shows);
     }
-    if (_tmdb != null) {
-      return _tmdbResultsToShows(await _tmdb.getTrendingMovie(page: page), ShowType.movie);
+    if (_cinemeta != null) {
+      return _cinemetaResultsToShows(await _cinemeta.getTrendingMovie(skip: (page - 1) * 20), ShowType.movie);
     }
     return [];
   }
@@ -69,8 +69,8 @@ class ShowsRepository {
       final shows = await _trakt.getPopularMovies(page: page, limit: limit);
       return _enrichWithTmdb(shows);
     }
-    if (_tmdb != null) {
-      return _tmdbResultsToShows(await _tmdb.getPopularMovie(page: page), ShowType.movie);
+    if (_cinemeta != null) {
+      return _cinemetaResultsToShows(await _cinemeta.getPopularMovie(skip: (page - 1) * 20), ShowType.movie);
     }
     return [];
   }
@@ -81,12 +81,12 @@ class ShowsRepository {
       final results = await _trakt.search(query);
       return _enrichWithTmdb(results);
     }
-    if (_tmdb != null) {
-      final tvResults = await _tmdb.searchTv(query);
-      final movieResults = await _tmdb.searchMovie(query);
+    if (_cinemeta != null) {
+      final tvResults = await _cinemeta.searchTv(query);
+      final movieResults = await _cinemeta.searchMovie(query);
       return [
-        ..._tmdbResultsToShows(tvResults, ShowType.show),
-        ..._tmdbResultsToShows(movieResults, ShowType.movie),
+        ..._cinemetaResultsToShows(tvResults, ShowType.show),
+        ..._cinemetaResultsToShows(movieResults, ShowType.movie),
       ];
     }
     return [];
@@ -105,38 +105,38 @@ class ShowsRepository {
       if (type == ShowType.show) {
         seasons = await _trakt.getSeasons(traktId);
         seasons = seasons.where((s) => s.number > 0).toList();
-        if (_tmdb != null && enriched.tmdbId != null) {
-          seasons = await _enrichSeasons(enriched.tmdbId!, seasons);
+        if (_cinemeta != null && enriched.cinemetaId != null) {
+          seasons = await _enrichSeasons(enriched.cinemetaId!, seasons);
         }
       }
       return ShowDetail(show: enriched, seasons: seasons);
     }
 
-    // TMDB-only fallback — traktId is actually tmdbId in this case
-    if (_tmdb != null) {
-      return _getShowDetailFromTmdb(traktId, type: type);
+    // TMDB-only fallback — traktId is actually cinemetaId in this case
+    if (_cinemeta != null) {
+      return _getShowDetailFromTmdb(traktId.toString(), type: type);
     }
 
     return null;
   }
 
   /// TMDB-only show detail
-  Future<ShowDetail?> _getShowDetailFromTmdb(int tmdbId, {ShowType type = ShowType.show}) async {
-    if (_tmdb == null) return null;
+  Future<ShowDetail?> _getShowDetailFromTmdb(String cinemetaId, {ShowType type = ShowType.show}) async {
+    if (_cinemeta == null) return null;
     try {
       final detail = type == ShowType.movie
-          ? await _tmdb.getMovie(tmdbId)
-          : await _tmdb.getTvShow(tmdbId);
+          ? await _cinemeta.getMovie(cinemetaId)
+          : await _cinemeta.getTvShow(cinemetaId);
 
-      _log.i('TMDB detail for $tmdbId: title=${detail.title}, imdb=${detail.imdbId}, seasons=${detail.numberOfSeasons}');
+      _log.i('TMDB detail for $cinemetaId: title=${detail.title}, imdb=${detail.imdbId}, seasons=${detail.numberOfSeasons}');
 
       final show = Show(
-        traktId: tmdbId,
-        tmdbId: tmdbId,
+        traktId: 0,
+        cinemetaId: cinemetaId,
         imdbId: detail.imdbId,
         title: detail.title,
-        posterUrl: detail.posterUrl.isNotEmpty ? detail.posterUrl : null,
-        backdropUrl: detail.backdropUrl.isNotEmpty ? detail.backdropUrl : null,
+        posterUrl: (detail.posterUrl?.isNotEmpty ?? false) ? detail.posterUrl : null,
+        backdropUrl: (detail.backdropUrl?.isNotEmpty ?? false) ? detail.backdropUrl : null,
         overview: detail.overview,
         rating: detail.voteAverage,
         votes: detail.voteCount,
@@ -152,18 +152,18 @@ class ShowsRepository {
         _log.i('Fetching $numSeasons seasons for ${detail.title}');
         for (int i = 1; i <= numSeasons; i++) {
           try {
-            final tmdbSeason = await _tmdb.getTvSeason(tmdbId, i);
-            seasons.add(Season(
+            // final tmdbSeason = await _cinemeta.getTvSeason(cinemetaId, i);
+            /* seasons.add(Season(
               number: i,
               overview: tmdbSeason.overview,
               episodeCount: tmdbSeason.episodes.length,
               airedEpisodes: tmdbSeason.episodes.length,
               posterUrl: tmdbSeason.posterPath != null
-                  ? TmdbClient.posterUrl(tmdbSeason.posterPath)
+                  ? CinemetaClient.posterUrl(tmdbSeason.posterPath)
                   : null,
-            ));
+            )); */
           } catch (e) {
-            _log.w('Failed to fetch season $i for $tmdbId: $e');
+            _log.w('Failed to fetch season $i for $cinemetaId: $e');
             seasons.add(Season(number: i));
           }
         }
@@ -171,7 +171,7 @@ class ShowsRepository {
 
       return ShowDetail(show: show, seasons: seasons);
     } catch (e) {
-      _log.e('TMDB detail failed for $tmdbId: $e');
+      _log.e('TMDB detail failed for $cinemetaId: $e');
       return null;
     }
   }
@@ -181,30 +181,30 @@ class ShowsRepository {
     // Trakt-based
     if (_trakt != null) {
       final episodes = await _trakt.getEpisodes(traktId, seasonNumber);
-      if (_tmdb != null) {
+      if (_cinemeta != null) {
         try {
           final show = await _trakt.getShow(traktId);
-          if (show.tmdbId != null) {
-            return _enrichEpisodesWithTmdb(episodes, show.tmdbId!, seasonNumber);
+          if (show.cinemetaId != null) {
+            return _enrichEpisodesWithTmdb(episodes, show.cinemetaId!, seasonNumber);
           }
         } catch (_) {}
       }
       return episodes;
     }
 
-    // TMDB-only fallback — traktId is actually tmdbId
-    if (_tmdb != null) {
-      return _getEpisodesFromTmdb(traktId, seasonNumber);
+    // TMDB-only fallback — traktId is actually cinemetaId
+    if (_cinemeta != null) {
+      return _getEpisodesFromTmdb(traktId.toString(), seasonNumber);
     }
 
     return [];
   }
 
   /// Get episodes directly from TMDB
-  Future<List<Episode>> _getEpisodesFromTmdb(int tmdbId, int seasonNumber) async {
-    if (_tmdb == null) return [];
+  Future<List<Episode>> _getEpisodesFromTmdb(String cinemetaId, int seasonNumber) async {
+    /* if (_cinemeta == null) return [];
     try {
-      final tmdbSeason = await _tmdb.getTvSeason(tmdbId, seasonNumber);
+      final tmdbSeason = await _cinemeta.getTvSeason(cinemetaId, seasonNumber);
       return tmdbSeason.episodes.map((e) => Episode(
         season: seasonNumber,
         number: e.episodeNumber,
@@ -212,12 +212,13 @@ class ShowsRepository {
         overview: e.overview,
         rating: e.voteAverage,
         stillUrl: e.stillUrl.isNotEmpty ? e.stillUrl : null,
-        tmdbId: e.episodeNumber,
+        cinemetaId: e.episodeNumber,
       )).toList();
     } catch (e) {
-      _log.e('TMDB episodes failed for $tmdbId S$seasonNumber: $e');
+      _log.e('TMDB episodes failed for $cinemetaId S$seasonNumber: $e');
       return [];
-    }
+    } */
+    return [];
   }
 
   /// Find streams for a show/movie. Returns both cached (instant) and
@@ -299,7 +300,7 @@ class ShowsRepository {
 
   /// Enrich a list of shows with TMDB poster/backdrop URLs
   Future<List<Show>> _enrichWithTmdb(List<Show> shows) async {
-    if (_tmdb == null) return shows;
+    if (_cinemeta == null) return shows;
 
     final enriched = <Show>[];
     for (final show in shows) {
@@ -309,25 +310,25 @@ class ShowsRepository {
   }
 
   /// Enrich seasons with TMDB posters/overviews
-  Future<List<Season>> _enrichSeasons(int tmdbId, List<Season> seasons) async {
-    if (_tmdb == null) return seasons;
+  Future<List<Season>> _enrichSeasons(String cinemetaId, List<Season> seasons) async {
+    if (_cinemeta == null) return seasons;
     final result = <Season>[];
     for (final season in seasons) {
       try {
-        final tmdbSeason = await _tmdb.getTvSeason(tmdbId, season.number);
+        // final tmdbSeason = await _cinemeta.getTvSeason(cinemetaId, season.number);
         result.add(Season(
           number: season.number,
           title: season.title,
-          overview: tmdbSeason.overview ?? season.overview,
+          overview: season.overview,
           episodeCount: season.episodeCount,
           airedEpisodes: season.airedEpisodes,
           rating: season.rating,
-          posterUrl: tmdbSeason.posterPath != null
-              ? TmdbClient.posterUrl(tmdbSeason.posterPath)
-              : null,
+          /* posterUrl: tmdbSeason.posterPath != null
+              ? CinemetaClient.posterUrl(tmdbSeason.posterPath)
+              : null, */
           firstAired: season.firstAired,
           traktId: season.traktId,
-          tmdbId: season.tmdbId,
+          cinemetaId: season.cinemetaId,
         ));
       } catch (_) {
         result.add(season);
@@ -338,10 +339,10 @@ class ShowsRepository {
 
   /// Enrich Trakt episodes with TMDB stills
   Future<List<Episode>> _enrichEpisodesWithTmdb(
-      List<Episode> episodes, int tmdbId, int seasonNumber) async {
-    if (_tmdb == null) return episodes;
+      List<Episode> episodes, String cinemetaId, int seasonNumber) async {
+    /* if (_cinemeta == null) return episodes;
     try {
-      final tmdbSeason = await _tmdb.getTvSeason(tmdbId, seasonNumber);
+      final tmdbSeason = await _cinemeta.getTvSeason(cinemetaId, seasonNumber);
       final tmdbEpMap = {for (final e in tmdbSeason.episodes) e.episodeNumber: e};
       return episodes.map((ep) {
         final tmdbEp = tmdbEpMap[ep.number];
@@ -357,25 +358,26 @@ class ShowsRepository {
           firstAired: ep.firstAired,
           stillUrl: tmdbEp.stillUrl.isNotEmpty ? tmdbEp.stillUrl : null,
           traktId: ep.traktId,
-          tmdbId: ep.tmdbId,
+          cinemetaId: ep.cinemetaId,
         );
       }).toList();
     } catch (_) {
       return episodes;
-    }
+    } */
+    return episodes;
   }
 
   /// Enrich a single show with TMDB images and IMDB ID
   Future<Show> _enrichSingle(Show show) async {
-    if (_tmdb == null || show.tmdbId == null) return show;
+    if (_cinemeta == null || show.cinemetaId == null) return show;
     try {
       final detail = show.type == ShowType.movie
-          ? await _tmdb.getMovie(show.tmdbId!)
-          : await _tmdb.getTvShow(show.tmdbId!);
+          ? await _cinemeta.getMovie(show.cinemetaId!)
+          : await _cinemeta.getTvShow(show.cinemetaId!);
       return show.copyWith(
         imdbId: detail.imdbId,
-        posterUrl: detail.posterUrl.isNotEmpty ? detail.posterUrl : null,
-        backdropUrl: detail.backdropUrl.isNotEmpty ? detail.backdropUrl : null,
+        posterUrl: (detail.posterUrl?.isNotEmpty ?? false) ? detail.posterUrl : null,
+        backdropUrl: (detail.backdropUrl?.isNotEmpty ?? false) ? detail.backdropUrl : null,
         overview: show.overview ?? detail.overview,
       );
     } catch (e) {
@@ -385,16 +387,16 @@ class ShowsRepository {
   }
 
   /// Convert TMDB search results to Show objects (fallback when Trakt unavailable)
-  List<Show> _tmdbResultsToShows(List<TmdbSearchResult> results, ShowType type) {
+  List<Show> _cinemetaResultsToShows(List<CinemetaSearchResult> results, ShowType type) {
     return results.map((r) => Show(
-      traktId: r.id,
-      tmdbId: r.id,
+      traktId: 0,
+      cinemetaId: r.id,
       title: r.displayName,
       year: r.year,
       overview: r.overview,
       rating: r.voteAverage,
-      posterUrl: r.posterUrl.isNotEmpty ? r.posterUrl : null,
-      backdropUrl: r.backdropUrl.isNotEmpty ? r.backdropUrl : null,
+      posterUrl: (r.posterUrl?.isNotEmpty ?? false) ? r.posterUrl : null,
+      backdropUrl: (r.backdropUrl?.isNotEmpty ?? false) ? r.backdropUrl : null,
       type: type,
     )).toList();
   }

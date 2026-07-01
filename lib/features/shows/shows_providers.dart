@@ -2,7 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../../data/datasources/remote/trakt_client.dart';
-import '../../data/datasources/remote/tmdb_client.dart';
+import '../../data/datasources/remote/cinemeta_client.dart';
 import '../../data/datasources/remote/debrid_service.dart';
 import '../../data/datasources/remote/torrent_search_client.dart';
 import '../../data/repositories/shows_repository.dart';
@@ -10,7 +10,6 @@ import '../../data/models/show.dart';
 
 // SharedPreferences keys for API credentials
 const _kTraktClientId = 'shows_trakt_client_id';
-const _kTmdbApiKey = 'shows_tmdb_api_key';
 const _kDebridTokens = 'shows_debrid_tokens'; // JSON map of type→token
 
 /// Provider for the shows repository (rebuilds when API keys change)
@@ -32,9 +31,7 @@ final showsRepositoryProvider = FutureProvider<ShowsRepository>((ref) async {
     trakt: keys.hasTraktKey
         ? TraktClient(clientId: keys.traktClientId)
         : null,
-    tmdb: keys.hasTmdbKey
-        ? TmdbClient(apiKey: keys.tmdbApiKey)
-        : null,
+    tmdb: CinemetaClient(),
     debrid: debrid,
     torrentSearch: TorrentSearchClient(),
   );
@@ -190,25 +187,24 @@ class ShowsApiKeysNotifier extends StateNotifier<ShowsApiKeys> {
 
     state = ShowsApiKeys(
       traktClientId: prefs.getString(_kTraktClientId) ?? '',
-      tmdbApiKey: prefs.getString(_kTmdbApiKey) ?? '',
-      debridTokens: tokens,
+            debridTokens: tokens,
     );
   }
 
   Future<void> save({
     required String traktClientId,
-    required String tmdbApiKey,
+    
     required Map<DebridType, String> debridTokens,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kTraktClientId, traktClientId);
-    await prefs.setString(_kTmdbApiKey, tmdbApiKey);
+    
     await prefs.setString(_kDebridTokens, jsonEncode(
       debridTokens.map((k, v) => MapEntry(k.name, v)),
     ));
     state = ShowsApiKeys(
       traktClientId: traktClientId,
-      tmdbApiKey: tmdbApiKey,
+      
       debridTokens: debridTokens,
     );
   }
@@ -222,7 +218,7 @@ class ShowsApiKeysNotifier extends StateNotifier<ShowsApiKeys> {
     }
     await save(
       traktClientId: state.traktClientId,
-      tmdbApiKey: state.tmdbApiKey,
+      
       debridTokens: newTokens,
     );
   }
@@ -230,20 +226,17 @@ class ShowsApiKeysNotifier extends StateNotifier<ShowsApiKeys> {
 
 class ShowsApiKeys {
   final String traktClientId;
-  final String tmdbApiKey;
-  final Map<DebridType, String> debridTokens;
+    final Map<DebridType, String> debridTokens;
 
   const ShowsApiKeys({
     this.traktClientId = '',
-    this.tmdbApiKey = '',
-    this.debridTokens = const {},
+        this.debridTokens = const {},
   });
 
   bool get isConfigured =>
-      traktClientId.isNotEmpty && tmdbApiKey.isNotEmpty && hasAnyDebridKey;
+      traktClientId.isNotEmpty &&  hasAnyDebridKey;
   bool get hasTraktKey => traktClientId.isNotEmpty;
-  bool get hasTmdbKey => tmdbApiKey.isNotEmpty;
-  bool get hasAnyDebridKey => debridTokens.values.any((t) => t.isNotEmpty);
+    bool get hasAnyDebridKey => debridTokens.values.any((t) => t.isNotEmpty);
   int get configuredDebridCount =>
       debridTokens.values.where((t) => t.isNotEmpty).length;
 }
@@ -296,7 +289,7 @@ class FavoritesNotifier extends StateNotifier<List<Show>> {
   static Map<String, dynamic> _showToJson(Show s) => {
         'traktId': s.traktId,
         'imdbId': s.imdbId,
-        'tmdbId': s.tmdbId,
+        'cinemetaId': s.cinemetaId,
         'title': s.title,
         'year': s.year,
         'overview': s.overview,
@@ -313,7 +306,7 @@ class FavoritesNotifier extends StateNotifier<List<Show>> {
   static Show _showFromJson(Map<String, dynamic> j) => Show(
         traktId: j['traktId'] as int,
         imdbId: j['imdbId'] as String?,
-        tmdbId: j['tmdbId'] as int?,
+        cinemetaId: j['cinemetaId'] as String?,
         title: j['title'] as String? ?? '',
         year: j['year'] as int?,
         overview: j['overview'] as String?,

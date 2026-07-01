@@ -7,6 +7,7 @@ import '../../data/models/epg.dart';
 import '../providers/provider_manager.dart';
 import 'epg_mapping_notifier.dart';
 import '../../core/fuzzy_match.dart';
+import '../media_shared_widgets.dart';
 
 class EpgMappingScreen extends ConsumerStatefulWidget {
   const EpgMappingScreen({super.key});
@@ -16,10 +17,20 @@ class EpgMappingScreen extends ConsumerStatefulWidget {
 }
 
 class _EpgMappingScreenState extends ConsumerState<EpgMappingScreen> {
+  final _searchController = TextEditingController();
+  final _searchFocusNode = FocusNode();
+
   @override
   void initState() {
     super.initState();
     Future.microtask(() => ref.read(epgMappingProvider.notifier).load());
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _searchFocusNode.dispose();
+    super.dispose();
   }
 
   @override
@@ -153,16 +164,10 @@ class _EpgMappingScreenState extends ConsumerState<EpgMappingScreen> {
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: TextField(
-                    style: const TextStyle(color: Colors.white),
-                    decoration: InputDecoration(
-                      hintText: 'Search channels...',
-                      prefixIcon: const Icon(Icons.search),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      isDense: true,
-                    ),
+                  child: MediaSearchBar(
+                    controller: _searchController,
+                    focusNode: _searchFocusNode,
+                    hint: 'Search channels...',
                     onChanged: (value) {
                       ref.read(epgMappingProvider.notifier).setSearch(value);
                     },

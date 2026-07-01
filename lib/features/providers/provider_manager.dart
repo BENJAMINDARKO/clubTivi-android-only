@@ -10,12 +10,15 @@ import '../../data/services/logo_resolver_service.dart';
 import '../../core/feature_gate.dart';
 import 'package:dio/dio.dart';
 
+import 'app_cache_provider.dart';
+
 /// Manages IPTV providers: adding, refreshing, channel loading.
 class ProviderManager {
+  final Ref _ref;
   final db.AppDatabase _db;
   final M3uParser _m3uParser = M3uParser();
 
-  ProviderManager(this._db);
+  ProviderManager(this._ref, this._db);
 
   /// Check provider count against tier limit.
   Future<void> _checkProviderLimit() async {
@@ -31,6 +34,26 @@ class ProviderManager {
     required String name,
     required String url,
   }) async {
+    // Auto-detect Xtream Codes M3U URLs and convert them seamlessly
+    try {
+      final uri = Uri.parse(url);
+      if (uri.path == '/get.php' && uri.queryParameters.containsKey('username') && uri.queryParameters.containsKey('password')) {
+        final username = uri.queryParameters['username']!;
+        final password = uri.queryParameters['password']!;
+        final baseUrl = '${uri.scheme}://${uri.host}${uri.hasPort ? ':${uri.port}' : ''}';
+        
+        return addXtreamProvider(
+          id: id,
+          name: name,
+          url: baseUrl,
+          username: username,
+          password: password,
+        );
+      }
+    } catch (_) {
+      // Not a valid URI or parsing failed, fallback to normal M3U processing
+    }
+
     await _checkProviderLimit();
     await _db.upsertProvider(db.ProvidersCompanion.insert(
       id: id,
@@ -58,6 +81,16 @@ class ProviderManager {
       username: Value(username),
       password: Value(password),
     ));
+
+    // Auto-add the Xtream Codes EPG Source
+    final epgUrl = '$url/xmltv.php?username=$username&password=$password';
+    await _db.upsertEpgSource(db.EpgSourcesCompanion.insert(
+      id: 'epg_$id',
+      name: '$name EPG',
+      url: epgUrl,
+      enabled: const Value(true),
+    ));
+
     await refreshProvider(id);
   }
 
@@ -92,14 +125,42 @@ class ProviderManager {
     // Resolve missing logos in background
     _resolveChannelLogos(channels).catchError((_) {});
 
+    // Invalidate app cache so UI updates instantly
+    _ref.read(appCacheProvider.notifier).refresh();
+
     return channels.length;
   }
 
   Future<List<Channel>> _refreshM3u(db.Provider provider) async {
-    final dio = Dio();
+    final dio = Dio(BaseOptions(
+      validateStatus: (status) => true,
+      headers: {
+        'User-Agent': 'VLC/3.0.18',
+      },
+    ));
     try {
       final response = await dio.get<String>(provider.url!);
+      if (response.data == null || response.data!.isEmpty) {
+        throw Exception('Empty response from M3U URL');
+      }
       final result = _m3uParser.parse(response.data!, providerId: provider.id);
+      
+      // Auto-add EPG source from M3U tvg-url header
+      if (result.epgUrl != null && result.epgUrl!.isNotEmpty) {
+        await _db.upsertEpgSource(db.EpgSourcesCompanion.insert(
+          id: 'epg_${provider.id}',
+          name: '${provider.name} EPG',
+          url: result.epgUrl!,
+          enabled: const Value(true),
+        ));
+      }
+
+      if (result.channels.isEmpty) {
+        final prefix = response.data!.length > 100 
+            ? response.data!.substring(0, 100).replaceAll('\n', ' ') 
+            : response.data!.replaceAll('\n', ' ');
+        throw Exception('No channels found in M3U file. Response preview: $prefix');
+      }
       return result.channels;
     } finally {
       dio.close();
@@ -113,7 +174,45 @@ class ProviderManager {
       password: provider.password!,
     );
     try {
-      return await client.getLiveStreams(providerId: provider.id);
+      final allChannels = <Channel>[];
+
+      // Fetch live categories and streams
+      try {
+        final liveCats = await client.getLiveCategories();
+        final liveCatMap = {for (var c in liveCats) c.id: c.name};
+        allChannels.addAll(await client.getLiveStreams(
+          providerId: provider.id,
+          categoryMap: liveCatMap,
+        ));
+      } catch (e) {
+        debugPrint('Failed to fetch live streams: $e');
+      }
+
+      // Fetch VOD categories and streams
+      try {
+        final vodCats = await client.getVodCategories();
+        final vodCatMap = {for (var c in vodCats) c.id: c.name};
+        allChannels.addAll(await client.getVodStreams(
+          providerId: provider.id,
+          categoryMap: vodCatMap,
+        ));
+      } catch (e) {
+        debugPrint('Failed to fetch VOD streams: $e');
+      }
+
+      // Fetch series categories and streams
+      try {
+        final seriesCats = await client.getSeriesCategories();
+        final seriesCatMap = {for (var c in seriesCats) c.id: c.name};
+        allChannels.addAll(await client.getSeriesStreams(
+          providerId: provider.id,
+          categoryMap: seriesCatMap,
+        ));
+      } catch (e) {
+        debugPrint('Failed to fetch series streams: $e');
+      }
+
+      return allChannels;
     } finally {
       client.dispose();
     }
@@ -121,6 +220,7 @@ class ProviderManager {
 
   Future<void> deleteProvider(String id) async {
     await _db.deleteProvider(id);
+    _ref.read(appCacheProvider.notifier).refresh();
   }
 
   /// Resolve missing logos in background after provider refresh.
@@ -312,5 +412,5 @@ final databaseProvider = Provider<db.AppDatabase>((ref) {
 
 /// Riverpod provider for the provider manager.
 final providerManagerProvider = Provider<ProviderManager>((ref) {
-  return ProviderManager(ref.watch(databaseProvider));
+  return ProviderManager(ref, ref.watch(databaseProvider));
 });

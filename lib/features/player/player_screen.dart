@@ -10,6 +10,7 @@ import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:volume_controller/volume_controller.dart';
 
 import '../../data/datasources/local/database.dart' as db;
 import '../../data/services/stream_alternatives_service.dart';
@@ -44,7 +45,7 @@ class PlayerScreen extends ConsumerStatefulWidget {
   ConsumerState<PlayerScreen> createState() => _PlayerScreenState();
 }
 
-class _PlayerScreenState extends ConsumerState<PlayerScreen> {
+class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBindingObserver {
   bool _showOverlay = true;
   int _currentUrlIndex = 0;
   bool _showChannelList = false;
@@ -83,6 +84,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _channelIndex = widget.currentIndex;
     _currentChannelName = widget.channelName;
     _currentChannelLogo = widget.channelLogo;
@@ -96,6 +98,22 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
     _autoHideOverlay();
     _loadEpgInfo();
     _loadFavoriteState();
+    
+    // Initialize system volume sync
+    // Suppress the system volume overlay since we show our own
+    VolumeController.instance.showSystemUI = false;
+    VolumeController.instance.addListener((v) {
+      if (mounted) {
+        setState(() {
+          _volume = v * 100;
+          _showVolumeOverlay = true;
+        });
+        _volumeTimer?.cancel();
+        _volumeTimer = Timer(const Duration(milliseconds: 1500), () {
+          if (mounted) setState(() => _showVolumeOverlay = false);
+        });
+      }
+    }, fetchInitialVolume: true);
   }
 
   Future<void> _loadFavoriteState() async {
@@ -382,7 +400,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
 
   void _autoHideOverlay() {
     _overlayTimer?.cancel();
-    _overlayTimer = Timer(const Duration(seconds: 4), () {
+    _overlayTimer = Timer(const Duration(seconds: 10), () {
       if (mounted) setState(() => _showOverlay = false);
     });
   }
@@ -398,7 +416,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
 
     final key = event.logicalKey;
-    final isAndroid = Platform.isAndroid;
 
     // Escape / Backspace / Back → close channel list first, then exit
     if (key == LogicalKeyboardKey.escape ||
@@ -406,6 +423,10 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
         key == LogicalKeyboardKey.goBack) {
       if (_showChannelList) {
         setState(() => _showChannelList = false);
+        return KeyEventResult.handled;
+      }
+      if (_showOverlay) {
+        setState(() => _showOverlay = false);
         return KeyEventResult.handled;
       }
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -417,38 +438,72 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
       return KeyEventResult.handled;
     }
 
-    // Select / Enter → toggle overlay
-    if (key == LogicalKeyboardKey.select ||
-        key == LogicalKeyboardKey.enter ||
-        key == LogicalKeyboardKey.gameButtonA) {
+    // Select / Enter → toggle overlay (only when no button in overlay has focus)
+    if (!_showOverlay &&
+        (key == LogicalKeyboardKey.select ||
+         key == LogicalKeyboardKey.enter ||
+         key == LogicalKeyboardKey.gameButtonA)) {
       _toggleOverlay();
       return KeyEventResult.handled;
     }
 
-    // Channel switching: use channelUp/Down on Android, arrows elsewhere
+    // Channel switching — dedicated CH+/CH- buttons always work,
+    // also pageUp/pageDown (common TV remote mapping),
+    // and arrows when overlay is hidden
     if (key == LogicalKeyboardKey.channelUp ||
-        (!isAndroid && key == LogicalKeyboardKey.arrowUp)) {
+        key == LogicalKeyboardKey.pageUp) {
       _switchChannel(-1);
       return KeyEventResult.handled;
     }
 
     if (key == LogicalKeyboardKey.channelDown ||
-        (!isAndroid && key == LogicalKeyboardKey.arrowDown)) {
+        key == LogicalKeyboardKey.pageDown) {
       _switchChannel(1);
       return KeyEventResult.handled;
     }
 
-    // Volume: only on non-Android (D-pad arrows needed for focus on Android)
-    if (!isAndroid && key == LogicalKeyboardKey.arrowLeft) {
-      _adjustVolume(-5);
+    if (key == LogicalKeyboardKey.arrowUp && !_showOverlay) {
+      _switchChannel(-1);
       return KeyEventResult.handled;
     }
 
-    if (!isAndroid && key == LogicalKeyboardKey.arrowRight) {
+    if (key == LogicalKeyboardKey.arrowDown && !_showOverlay) {
+      _switchChannel(1);
+      return KeyEventResult.handled;
+    }
+
+    // Volume — physical volume keys on remote
+    if (key == LogicalKeyboardKey.audioVolumeUp) {
       _adjustVolume(5);
       return KeyEventResult.handled;
     }
 
+    if (key == LogicalKeyboardKey.audioVolumeDown) {
+      _adjustVolume(-5);
+      return KeyEventResult.handled;
+    }
+
+    if (key == LogicalKeyboardKey.audioVolumeMute) {
+      if (_volume > 0) {
+        _adjustVolume(-_volume); // mute
+      } else {
+        _adjustVolume(50); // unmute to 50%
+      }
+      return KeyEventResult.handled;
+    }
+
+    // Volume adjusting when overlay is hidden (left/right arrows)
+    if (key == LogicalKeyboardKey.arrowLeft && !_showOverlay) {
+      _adjustVolume(-5);
+      return KeyEventResult.handled;
+    }
+
+    if (key == LogicalKeyboardKey.arrowRight && !_showOverlay) {
+      _adjustVolume(5);
+      return KeyEventResult.handled;
+    }
+
+    // If overlay is shown, let arrows pass through to navigate buttons natively
     return KeyEventResult.ignored;
   }
 
@@ -483,7 +538,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
       _volume = (_volume + delta).clamp(0.0, 100.0);
       _showVolumeOverlay = true;
     });
-    ref.read(playerServiceProvider).setVolume(_volume);
+    VolumeController.instance.setVolume(_volume / 100.0);
     _volumeTimer?.cancel();
     _volumeTimer = Timer(const Duration(milliseconds: 1500), () {
       if (mounted) setState(() => _showVolumeOverlay = false);
@@ -491,9 +546,20 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      ref.read(playerServiceProvider).pause();
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _overlayTimer?.cancel();
     _volumeTimer?.cancel();
+    VolumeController.instance.removeListener();
+    // Stop playing media when exiting the player screen
+    ref.read(playerServiceProvider).stop();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();
   }
@@ -522,7 +588,8 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
 
               // TiviMate-style control bar overlay
               PlayerControlBar(
-                isCasting: ref.read(castServiceProvider).isCasting,
+                visible: _showOverlay,
+                volume: _volume,
                 isFavorite: _isFavorite,
                 hasSubtitles: _subtitleTracks.isNotEmpty,
                 subtitlesEnabled: _subtitlesEnabled,
@@ -530,7 +597,8 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                 onSubtitleSelect: _showSubtitlePicker,
                 audioTrackCount: _audioTracks.length,
                 onAudioSelect: _showAudioPicker,
-                onCastTap: () => _showCastPicker(),
+                onPrevChannel: () => _switchChannel(-1),
+                onNextChannel: () => _switchChannel(1),
                 onBackTap: () {
                   GoRouter.of(context).canPop()
                       ? GoRouter.of(context).pop()
@@ -538,7 +606,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                 },
                 onScreenshot: _takeScreenshot,
                 onFavorite: _toggleFavorite,
-                onPip: _enterPip,
                 onInfo: _showInfoDialog,
                 onRename: _renameCurrentChannel,
                 onSettings: () => GoRouter.of(context).push('/settings'),
@@ -744,13 +811,13 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                           padding: const EdgeInsets.fromLTRB(16, 40, 8, 8),
                           child: Row(
                             children: [
-                              const Icon(Icons.list, color: Colors.white70, size: 20),
+                              const Icon(Icons.menu, color: Colors.white70, size: 20),
                               const SizedBox(width: 8),
                               const Text('Channels', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)),
                               const Spacer(),
                               IconButton(
                                 icon: const Icon(Icons.close, color: Colors.white54, size: 20),
-                                onPressed: () => setState(() => _showChannelList = false),
+                        onPressed: () => setState(() => _showChannelList = false),
                               ),
                             ],
                           ),
@@ -762,8 +829,20 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                             itemBuilder: (ctx, i) {
                               final ch = widget.channels[i];
                               final name = ch['name'] as String? ?? '';
+                              final groupTitle = ch['groupTitle'] as String? ?? '';
                               final isCurrent = i == _channelIndex;
-                              return ListTile(
+                              
+                              // Check if we need to show a header
+                              bool showHeader = i == 0;
+                              if (i > 0) {
+                                final prevCh = widget.channels[i - 1];
+                                final prevGroupTitle = prevCh['groupTitle'] as String? ?? '';
+                                if (groupTitle != prevGroupTitle) {
+                                  showHeader = true;
+                                }
+                              }
+
+                              Widget tile = ListTile(
                                 dense: true,
                                 selected: isCurrent,
                                 selectedTileColor: const Color(0xFF6C5CE7).withValues(alpha: 0.3),
@@ -782,6 +861,30 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                                   }
                                 },
                               );
+                              
+                              if (showHeader && groupTitle.isNotEmpty) {
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    if (groupTitle.isNotEmpty)
+                                      Padding(
+                                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                                        child: Text(
+                                          groupTitle,
+                                          style: const TextStyle(
+                                            color: Color(0xFFA29BFE),
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 12,
+                                            letterSpacing: 1.2,
+                                          ),
+                                        ),
+                                      ),
+                                    tile,
+                                  ],
+                                );
+                              }
+                              return tile;
                             },
                           ),
                         ),
@@ -1056,6 +1159,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
         tvgLogo: ch['tvgLogo']?.toString(),
         favorite: false,
         hidden: false,
+        parentalLocked: false,
         sortOrder: 0,
       );
       final ps = ref.read(playerServiceProvider);

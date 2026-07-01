@@ -12,7 +12,7 @@ final _log = Logger(printer: SimplePrinter());
 /// Keys in SharedPreferences to include in backup.
 const _backupPrefKeys = [
   'shows_trakt_client_id',
-  'shows_tmdb_api_key',
+  'shows_cinemeta_api_key',
   'shows_debrid_tokens',
   'shows_favorites',
   'last_group',

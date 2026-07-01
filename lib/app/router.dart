@@ -11,19 +11,89 @@ import '../features/settings/debrid_services_screen.dart';
 import '../features/shows/shows_screen.dart';
 import '../features/shows/show_detail_screen.dart';
 import '../features/splash/splash_screen.dart';
+import '../features/live/live_screen.dart';
+import '../features/movies/movies_screen.dart';
+import '../features/series/series_screen.dart';
+import '../features/search/search_screen.dart';
+import '../features/parental/parental_screen.dart';
+import '../features/parental/parental_category_screen.dart';
 import '../platform/tv/tv_shell.dart';
 import '../data/models/show.dart';
+import '../data/datasources/local/database.dart' as db;
+import '../features/movies/iptv_movie_detail_screen.dart';
+import '../features/series/iptv_series_detail_screen.dart';
+import '../features/library/library_screen.dart';
 
 GoRouter createRouter() {
   // Routes that live inside the TV sidebar shell
+  final tvShellRoute = StatefulShellRoute.indexedStack(
+    builder: (context, state, navigationShell) => TvShell(navigationShell: navigationShell),
+    branches: [
+      StatefulShellBranch(
+        routes: [
+          GoRoute(
+            path: '/',
+            builder: (context, state) => const LibraryScreen(),
+          ),
+          GoRoute(
+            path: '/library',
+            builder: (context, state) => const LibraryScreen(),
+          ),
+        ],
+      ),
+      StatefulShellBranch(
+        routes: [
+          GoRoute(
+            path: '/live',
+            builder: (context, state) => LiveScreen(
+              category: state.uri.queryParameters['category'],
+              providerId: state.uri.queryParameters['providerId'],
+            ),
+          ),
+        ],
+      ),
+      StatefulShellBranch(
+        routes: [
+          GoRoute(
+            path: '/movies',
+            builder: (context, state) => MoviesScreen(
+              category: state.uri.queryParameters['category'],
+              providerId: state.uri.queryParameters['providerId'],
+            ),
+          ),
+        ],
+      ),
+      StatefulShellBranch(
+        routes: [
+          GoRoute(
+            path: '/series',
+            builder: (context, state) => SeriesScreen(
+              category: state.uri.queryParameters['category'],
+              providerId: state.uri.queryParameters['providerId'],
+            ),
+          ),
+        ],
+      ),
+      StatefulShellBranch(
+        routes: [
+          GoRoute(
+            path: '/parental',
+            builder: (context, state) => const ParentalScreen(),
+          ),
+        ],
+      ),
+    ],
+  );
+
+  // Non-TV sidebar routes
   final sidebarRoutes = [
-    GoRoute(
-      path: '/',
-      builder: (context, state) => const ChannelsScreen(),
-    ),
     GoRoute(
       path: '/guide',
       builder: (context, state) => const GuideScreen(),
+    ),
+    GoRoute(
+      path: '/search',
+      builder: (context, state) => const SearchScreen(),
     ),
     GoRoute(
       path: '/providers',
@@ -79,16 +149,39 @@ GoRouter createRouter() {
         return ShowDetailScreen(traktId: traktId, initialShow: show);
       },
     ),
+    GoRoute(
+      path: '/parental_category',
+      builder: (context, state) {
+        final extra = state.extra as Map<String, dynamic>? ?? {};
+        return ParentalCategoryScreen(
+          providerId: extra['providerId'] as String? ?? '',
+          groupTitle: extra['groupTitle'] as String? ?? '',
+          streamType: extra['streamType'] as String? ?? '',
+        );
+      },
+    ),
+    GoRoute(
+      path: '/movies/details',
+      builder: (context, state) {
+        final channel = state.extra as db.Channel;
+        return IptvMovieDetailScreen(channel: channel);
+      },
+    ),
+    GoRoute(
+      path: '/series/details',
+      builder: (context, state) {
+        final channel = state.extra as db.Channel;
+        return IptvSeriesDetailScreen(channel: channel);
+      },
+    ),
   ];
 
   if (PlatformInfo.isTV) {
     return GoRouter(
       initialLocation: '/splash',
       routes: [
-        ShellRoute(
-          builder: (context, state, child) => TvShell(child: child),
-          routes: sidebarRoutes,
-        ),
+        tvShellRoute,
+        ...sidebarRoutes,
         ...standaloneRoutes,
       ],
     );
@@ -98,6 +191,30 @@ GoRouter createRouter() {
   return GoRouter(
     initialLocation: '/splash',
     routes: [
+      GoRoute(
+        path: '/',
+        builder: (context, state) => const LibraryScreen(),
+      ),
+      GoRoute(
+        path: '/library',
+        builder: (context, state) => const LibraryScreen(),
+      ),
+      GoRoute(
+        path: '/live',
+        builder: (context, state) => const LiveScreen(),
+      ),
+      GoRoute(
+        path: '/movies',
+        builder: (context, state) => const MoviesScreen(),
+      ),
+      GoRoute(
+        path: '/series',
+        builder: (context, state) => const SeriesScreen(),
+      ),
+      GoRoute(
+        path: '/parental',
+        builder: (context, state) => const ParentalScreen(),
+      ),
       ...sidebarRoutes,
       ...standaloneRoutes,
     ],

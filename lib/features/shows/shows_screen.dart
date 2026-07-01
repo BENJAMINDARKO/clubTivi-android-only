@@ -42,7 +42,7 @@ class _ShowsScreenState extends ConsumerState<ShowsScreen> {
   Widget build(BuildContext context) {
     final apiKeys = ref.watch(showsApiKeysProvider);
 
-    if (!apiKeys.hasTraktKey && !apiKeys.hasTmdbKey) {
+    if (!apiKeys.hasTraktKey) {
       return _buildSetupPrompt(context);
     }
 
@@ -310,6 +310,7 @@ class _ShowsScreenState extends ConsumerState<ShowsScreen> {
           );
         }
         return GridView.builder(
+          clipBehavior: Clip.none,
           padding: const EdgeInsets.all(16),
           gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
             maxCrossAxisExtent: 180,
@@ -395,7 +396,7 @@ class _ShowPosterCard extends ConsumerWidget {
               decoration: hasFocus
                   ? BoxDecoration(
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFF6C5CE7), width: 2),
+                      border: Border.all(color: Colors.white, width: 2),
                     )
                   : null,
               child: Column(

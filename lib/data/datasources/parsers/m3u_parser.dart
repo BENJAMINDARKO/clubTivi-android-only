@@ -19,17 +19,32 @@ class M3uParser {
     }
 
     String? currentExtInf;
+    String? currentExtGrp;
+    String? epgUrl;
 
     for (var i = 0; i < lines.length; i++) {
       final line = lines[i].trim();
 
-      if (line.isEmpty || line == '#EXTM3U') continue;
+      if (line.isEmpty) continue;
 
-      // Skip global EXTM3U attributes line
-      if (line.startsWith('#EXTM3U ')) continue;
+      if (line.startsWith('#EXTM3U')) {
+        final regex = RegExp(r'(?:tvg-url|x-tvg-url)="([^"]*)"');
+        final match = regex.firstMatch(line);
+        if (match != null) {
+          epgUrl = match.group(1);
+        }
+        continue;
+      }
 
       if (line.startsWith('#EXTINF:')) {
         currentExtInf = line;
+        // reset extGrp when starting a new channel
+        currentExtGrp = null;
+        continue;
+      }
+
+      if (line.startsWith('#EXTGRP:')) {
+        currentExtGrp = line.substring(8).trim();
         continue;
       }
 
@@ -39,19 +54,20 @@ class M3uParser {
       // This should be a URL
       if (currentExtInf != null) {
         try {
-          final channel = _parseEntry(currentExtInf, line, providerId);
+          final channel = _parseEntry(currentExtInf, line, currentExtGrp, providerId);
           if (channel != null) channels.add(channel);
         } catch (e) {
           errors.add('Line $i: $e');
         }
         currentExtInf = null;
+        currentExtGrp = null;
       }
     }
 
-    return M3uResult(channels: channels, errors: errors);
+    return M3uResult(channels: channels, errors: errors, epgUrl: epgUrl);
   }
 
-  Channel? _parseEntry(String extInf, String url, String providerId) {
+  Channel? _parseEntry(String extInf, String url, String? extGrp, String providerId) {
     if (url.isEmpty) return null;
 
     // Parse #EXTINF:-1 tvg-id="..." tvg-name="..." ... , Channel Name
@@ -75,6 +91,8 @@ class M3uParser {
       channelNumber = int.tryParse(chnoStr);
     }
 
+    final groupTitle = _emptyToNull(attrs['group-title']) ?? extGrp;
+
     return Channel(
       id: channelId,
       providerId: providerId,
@@ -82,10 +100,10 @@ class M3uParser {
       tvgId: _emptyToNull(attrs['tvg-id']),
       tvgName: _emptyToNull(attrs['tvg-name']),
       tvgLogo: _emptyToNull(attrs['tvg-logo']),
-      groupTitle: _emptyToNull(attrs['group-title']),
+      groupTitle: groupTitle,
       channelNumber: channelNumber,
       streamUrl: url,
-      streamType: _inferStreamType(attrs, url),
+      streamType: _inferStreamType(attrs, url, name, groupTitle),
     );
   }
 
@@ -94,10 +112,12 @@ class M3uParser {
   Map<String, String> _parseAttributes(String extInf) {
     final attrs = <String, String>{};
 
-    // Match key="value" pairs
-    final regex = RegExp(r'([\w-]+)="([^"]*)"');
+    // Match key="value" or key=value pairs
+    final regex = RegExp(r'([\w-]+)=(?:"([^"]*)"|([^"\s,]+))');
     for (final match in regex.allMatches(extInf)) {
-      attrs[match.group(1)!.toLowerCase()] = match.group(2)!;
+      final key = match.group(1)!.toLowerCase();
+      final value = match.group(2) ?? match.group(3) ?? '';
+      attrs[key] = value;
     }
 
     return attrs;
@@ -110,17 +130,47 @@ class M3uParser {
     return extInf.substring(commaIndex + 1).trim();
   }
 
-  StreamType _inferStreamType(Map<String, String> attrs, String url) {
-    final groupTitle = (attrs['group-title'] ?? '').toLowerCase();
-    if (groupTitle.contains('vod') || groupTitle.contains('movie')) {
+  StreamType _inferStreamType(Map<String, String> attrs, String url, String name, String? resolvedGroupTitle) {
+    // 1. Check explicit tvg-type attribute if present
+    final tvgType = (attrs['tvg-type'] ?? '').toLowerCase();
+    if (tvgType.contains('movie') || tvgType.contains('vod')) return StreamType.vod;
+    if (tvgType.contains('series') || tvgType.contains('tv show')) return StreamType.series;
+    if (tvgType.contains('live') || tvgType.contains('tv')) return StreamType.live;
+
+    // 2. Check group-title
+    final lowerGroupTitle = (resolvedGroupTitle ?? '').toLowerCase();
+    if (lowerGroupTitle.contains('vod') || lowerGroupTitle.contains('movie') || lowerGroupTitle.contains('film')) {
       return StreamType.vod;
     }
-    if (groupTitle.contains('series')) {
+    if (lowerGroupTitle.contains('series') || lowerGroupTitle.contains('show')) {
       return StreamType.series;
     }
-    // Xtream Codes URL patterns
-    if (url.contains('/movie/')) return StreamType.vod;
-    if (url.contains('/series/')) return StreamType.series;
+
+    // 3. Xtream Codes URL patterns
+    final lowerUrl = url.toLowerCase();
+    if (lowerUrl.contains('/movie/')) return StreamType.vod;
+    if (lowerUrl.contains('/series/')) return StreamType.series;
+
+    // 4. File extension from URL
+    final urlPath = lowerUrl.split('?').first;
+    if (urlPath.endsWith('.mp4') || 
+        urlPath.endsWith('.mkv') || 
+        urlPath.endsWith('.avi') || 
+        urlPath.endsWith('.mov') ||
+        urlPath.endsWith('.wmv')) {
+      // If it looks like a movie file, check if the name looks like a series episode
+      if (RegExp(r's\d{1,2}\s*e\d{1,2}', caseSensitive: false).hasMatch(name)) {
+        return StreamType.series;
+      }
+      return StreamType.vod;
+    }
+
+    // 5. Name patterns for series
+    if (RegExp(r's\d{1,2}\s*e\d{1,2}', caseSensitive: false).hasMatch(name)) {
+      return StreamType.series;
+    }
+
+    // Default fallback
     return StreamType.live;
   }
 
@@ -134,8 +184,13 @@ class M3uParser {
 class M3uResult {
   final List<Channel> channels;
   final List<String> errors;
+  final String? epgUrl;
 
-  const M3uResult({required this.channels, this.errors = const []});
+  const M3uResult({
+    required this.channels, 
+    this.errors = const [],
+    this.epgUrl,
+  });
 
   bool get hasErrors => errors.isNotEmpty;
   int get channelCount => channels.length;

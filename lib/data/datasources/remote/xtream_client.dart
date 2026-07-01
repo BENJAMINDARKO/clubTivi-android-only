@@ -20,7 +20,11 @@ class XtreamClient {
   }) : _dio = dio ?? Dio() {
     _dio.options
       ..connectTimeout = const Duration(seconds: 10)
-      ..receiveTimeout = const Duration(seconds: 30);
+      ..receiveTimeout = const Duration(seconds: 30)
+      ..headers = {
+        'User-Agent': 'VLC/3.0.18',
+      }
+      ..validateStatus = (status) => true;
   }
 
   String get _apiBase => '$baseUrl/player_api.php';
@@ -54,6 +58,7 @@ class XtreamClient {
   Future<List<Channel>> getLiveStreams({
     String? categoryId,
     required String providerId,
+    required Map<String, String> categoryMap,
   }) async {
     final params = {..._authParams, 'action': 'get_live_streams'};
     if (categoryId != null) params['category_id'] = categoryId;
@@ -61,7 +66,7 @@ class XtreamClient {
     final response = await _dio.get(_apiBase, queryParameters: params);
     return (response.data as List).map((e) {
       final json = e as Map<String, dynamic>;
-      return _channelFromXtream(json, providerId);
+      return _channelFromXtream(json, providerId, categoryMap);
     }).toList();
   }
 
@@ -80,6 +85,7 @@ class XtreamClient {
   Future<List<Channel>> getVodStreams({
     String? categoryId,
     required String providerId,
+    required Map<String, String> categoryMap,
   }) async {
     final params = {..._authParams, 'action': 'get_vod_streams'};
     if (categoryId != null) params['category_id'] = categoryId;
@@ -87,7 +93,7 @@ class XtreamClient {
     final response = await _dio.get(_apiBase, queryParameters: params);
     return (response.data as List).map((e) {
       final json = e as Map<String, dynamic>;
-      return _vodFromXtream(json, providerId);
+      return _vodFromXtream(json, providerId, categoryMap);
     }).toList();
   }
 
@@ -106,6 +112,7 @@ class XtreamClient {
   Future<List<Channel>> getSeriesStreams({
     String? categoryId,
     required String providerId,
+    required Map<String, String> categoryMap,
   }) async {
     final params = {..._authParams, 'action': 'get_series'};
     if (categoryId != null) params['category_id'] = categoryId;
@@ -113,8 +120,21 @@ class XtreamClient {
     final response = await _dio.get(_apiBase, queryParameters: params);
     return (response.data as List).map((e) {
       final json = e as Map<String, dynamic>;
-      return _seriesFromXtream(json, providerId);
+      return _seriesFromXtream(json, providerId, categoryMap);
     }).toList();
+  }
+
+  /// Get detailed series info (seasons and episodes).
+  Future<XtreamSeriesInfo> getSeriesInfo(String seriesId) async {
+    final response = await _dio.get(
+      _apiBase,
+      queryParameters: {
+        ..._authParams,
+        'action': 'get_series_info',
+        'series_id': seriesId,
+      },
+    );
+    return XtreamSeriesInfo.fromJson(response.data as Map<String, dynamic>);
   }
 
   /// Get short EPG for a specific stream (current + next few programs).
@@ -144,9 +164,10 @@ class XtreamClient {
     return '$baseUrl/movie/$username/$password/$streamId.$extension';
   }
 
-  Channel _channelFromXtream(Map<String, dynamic> json, String providerId) {
+  Channel _channelFromXtream(Map<String, dynamic> json, String providerId, Map<String, String> categoryMap) {
     final streamId = json['stream_id'];
     final num = json['num'] is int ? json['num'] as int : int.tryParse('${json['num']}');
+    final categoryId = json['category_id']?.toString() ?? '';
 
     return Channel(
       id: '${providerId}_$streamId',
@@ -155,37 +176,39 @@ class XtreamClient {
       tvgId: json['epg_channel_id'] as String?,
       tvgName: json['name'] as String?,
       tvgLogo: json['stream_icon'] as String?,
-      groupTitle: json['category_name'] as String?,
+      groupTitle: categoryMap[categoryId] ?? json['category_name'] as String?,
       channelNumber: num,
       streamUrl: buildLiveUrl(streamId as int),
       streamType: StreamType.live,
     );
   }
 
-  Channel _vodFromXtream(Map<String, dynamic> json, String providerId) {
+  Channel _vodFromXtream(Map<String, dynamic> json, String providerId, Map<String, String> categoryMap) {
     final streamId = json['stream_id'];
     final ext = json['container_extension'] as String? ?? 'mp4';
+    final categoryId = json['category_id']?.toString() ?? '';
 
     return Channel(
       id: '${providerId}_vod_$streamId',
       providerId: providerId,
       name: json['name'] as String? ?? 'Unknown',
       tvgLogo: json['stream_icon'] as String?,
-      groupTitle: json['category_name'] as String?,
+      groupTitle: categoryMap[categoryId] ?? json['category_name'] as String?,
       streamUrl: buildVodUrl(streamId as int, extension: ext),
       streamType: StreamType.vod,
     );
   }
 
-  Channel _seriesFromXtream(Map<String, dynamic> json, String providerId) {
+  Channel _seriesFromXtream(Map<String, dynamic> json, String providerId, Map<String, String> categoryMap) {
     final seriesId = json['series_id'];
+    final categoryId = json['category_id']?.toString() ?? '';
 
     return Channel(
       id: '${providerId}_series_$seriesId',
       providerId: providerId,
       name: json['name'] as String? ?? 'Unknown',
       tvgLogo: json['cover'] as String?,
-      groupTitle: json['category_name'] as String?,
+      groupTitle: categoryMap[categoryId] ?? json['category_name'] as String?,
       streamUrl: '', // Series need episode lookup
       streamType: StreamType.series,
     );
@@ -289,6 +312,81 @@ class XtreamEpgEntry {
       description: json['description'] as String? ?? '',
       start: DateTime.tryParse(json['start'] as String? ?? ''),
       end: DateTime.tryParse(json['end'] as String? ?? ''),
+    );
+  }
+}
+
+/// Xtream detailed series info (seasons and episodes).
+class XtreamSeriesInfo {
+  final Map<String, dynamic> info;
+  final Map<String, List<XtreamEpisode>> episodes;
+
+  const XtreamSeriesInfo({
+    required this.info,
+    required this.episodes,
+  });
+
+  factory XtreamSeriesInfo.fromJson(Map<String, dynamic> json) {
+    final info = json['info'] as Map<String, dynamic>? ?? {};
+    final episodesMap = json['episodes'] as Map<String, dynamic>? ?? {};
+    
+    final parsedEpisodes = <String, List<XtreamEpisode>>{};
+    for (final entry in episodesMap.entries) {
+      if (entry.value is List) {
+        parsedEpisodes[entry.key] = (entry.value as List)
+            .map((e) => XtreamEpisode.fromJson(e as Map<String, dynamic>))
+            .toList();
+      }
+    }
+    
+    return XtreamSeriesInfo(
+      info: info,
+      episodes: parsedEpisodes,
+    );
+  }
+}
+
+/// Xtream series episode.
+class XtreamEpisode {
+  final String id;
+  final int? episodeNum;
+  final String title;
+  final String containerExtension;
+  final String customSid;
+  final String added;
+  final int? season;
+  final String directSource;
+  final String? info;
+
+  const XtreamEpisode({
+    required this.id,
+    required this.episodeNum,
+    required this.title,
+    required this.containerExtension,
+    required this.customSid,
+    required this.added,
+    required this.season,
+    required this.directSource,
+    this.info,
+  });
+
+  factory XtreamEpisode.fromJson(Map<String, dynamic> json) {
+    final infoObj = json['info'];
+    String? plotInfo;
+    if (infoObj is Map) {
+      plotInfo = infoObj['plot']?.toString();
+    }
+    
+    return XtreamEpisode(
+      id: json['id']?.toString() ?? '',
+      episodeNum: int.tryParse('${json['episode_num']}'),
+      title: json['title'] as String? ?? '',
+      containerExtension: json['container_extension'] as String? ?? 'mp4',
+      customSid: json['custom_sid'] as String? ?? '',
+      added: json['added'] as String? ?? '',
+      season: int.tryParse('${json['season']}'),
+      directSource: json['direct_source'] as String? ?? '',
+      info: plotInfo,
     );
   }
 }

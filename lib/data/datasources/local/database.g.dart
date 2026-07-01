@@ -750,6 +750,21 @@ class $ChannelsTable extends Channels with TableInfo<$ChannelsTable, Channel> {
     ),
     defaultValue: const Constant(false),
   );
+  static const VerificationMeta _parentalLockedMeta = const VerificationMeta(
+    'parentalLocked',
+  );
+  @override
+  late final GeneratedColumn<bool> parentalLocked = GeneratedColumn<bool>(
+    'parental_locked',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("parental_locked" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   static const VerificationMeta _sortOrderMeta = const VerificationMeta(
     'sortOrder',
   );
@@ -776,6 +791,7 @@ class $ChannelsTable extends Channels with TableInfo<$ChannelsTable, Channel> {
     streamType,
     favorite,
     hidden,
+    parentalLocked,
     sortOrder,
   ];
   @override
@@ -870,6 +886,15 @@ class $ChannelsTable extends Channels with TableInfo<$ChannelsTable, Channel> {
         hidden.isAcceptableOrUnknown(data['hidden']!, _hiddenMeta),
       );
     }
+    if (data.containsKey('parental_locked')) {
+      context.handle(
+        _parentalLockedMeta,
+        parentalLocked.isAcceptableOrUnknown(
+          data['parental_locked']!,
+          _parentalLockedMeta,
+        ),
+      );
+    }
     if (data.containsKey('sort_order')) {
       context.handle(
         _sortOrderMeta,
@@ -933,6 +958,10 @@ class $ChannelsTable extends Channels with TableInfo<$ChannelsTable, Channel> {
         DriftSqlType.bool,
         data['${effectivePrefix}hidden'],
       )!,
+      parentalLocked: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}parental_locked'],
+      )!,
       sortOrder: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}sort_order'],
@@ -959,6 +988,7 @@ class Channel extends DataClass implements Insertable<Channel> {
   final String streamType;
   final bool favorite;
   final bool hidden;
+  final bool parentalLocked;
   final int sortOrder;
   const Channel({
     required this.id,
@@ -973,6 +1003,7 @@ class Channel extends DataClass implements Insertable<Channel> {
     required this.streamType,
     required this.favorite,
     required this.hidden,
+    required this.parentalLocked,
     required this.sortOrder,
   });
   @override
@@ -1000,6 +1031,7 @@ class Channel extends DataClass implements Insertable<Channel> {
     map['stream_type'] = Variable<String>(streamType);
     map['favorite'] = Variable<bool>(favorite);
     map['hidden'] = Variable<bool>(hidden);
+    map['parental_locked'] = Variable<bool>(parentalLocked);
     map['sort_order'] = Variable<int>(sortOrder);
     return map;
   }
@@ -1028,6 +1060,7 @@ class Channel extends DataClass implements Insertable<Channel> {
       streamType: Value(streamType),
       favorite: Value(favorite),
       hidden: Value(hidden),
+      parentalLocked: Value(parentalLocked),
       sortOrder: Value(sortOrder),
     );
   }
@@ -1050,6 +1083,7 @@ class Channel extends DataClass implements Insertable<Channel> {
       streamType: serializer.fromJson<String>(json['streamType']),
       favorite: serializer.fromJson<bool>(json['favorite']),
       hidden: serializer.fromJson<bool>(json['hidden']),
+      parentalLocked: serializer.fromJson<bool>(json['parentalLocked']),
       sortOrder: serializer.fromJson<int>(json['sortOrder']),
     );
   }
@@ -1069,6 +1103,7 @@ class Channel extends DataClass implements Insertable<Channel> {
       'streamType': serializer.toJson<String>(streamType),
       'favorite': serializer.toJson<bool>(favorite),
       'hidden': serializer.toJson<bool>(hidden),
+      'parentalLocked': serializer.toJson<bool>(parentalLocked),
       'sortOrder': serializer.toJson<int>(sortOrder),
     };
   }
@@ -1086,6 +1121,7 @@ class Channel extends DataClass implements Insertable<Channel> {
     String? streamType,
     bool? favorite,
     bool? hidden,
+    bool? parentalLocked,
     int? sortOrder,
   }) => Channel(
     id: id ?? this.id,
@@ -1102,6 +1138,7 @@ class Channel extends DataClass implements Insertable<Channel> {
     streamType: streamType ?? this.streamType,
     favorite: favorite ?? this.favorite,
     hidden: hidden ?? this.hidden,
+    parentalLocked: parentalLocked ?? this.parentalLocked,
     sortOrder: sortOrder ?? this.sortOrder,
   );
   Channel copyWithCompanion(ChannelsCompanion data) {
@@ -1126,6 +1163,9 @@ class Channel extends DataClass implements Insertable<Channel> {
           : this.streamType,
       favorite: data.favorite.present ? data.favorite.value : this.favorite,
       hidden: data.hidden.present ? data.hidden.value : this.hidden,
+      parentalLocked: data.parentalLocked.present
+          ? data.parentalLocked.value
+          : this.parentalLocked,
       sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
     );
   }
@@ -1145,6 +1185,7 @@ class Channel extends DataClass implements Insertable<Channel> {
           ..write('streamType: $streamType, ')
           ..write('favorite: $favorite, ')
           ..write('hidden: $hidden, ')
+          ..write('parentalLocked: $parentalLocked, ')
           ..write('sortOrder: $sortOrder')
           ..write(')'))
         .toString();
@@ -1164,6 +1205,7 @@ class Channel extends DataClass implements Insertable<Channel> {
     streamType,
     favorite,
     hidden,
+    parentalLocked,
     sortOrder,
   );
   @override
@@ -1182,6 +1224,7 @@ class Channel extends DataClass implements Insertable<Channel> {
           other.streamType == this.streamType &&
           other.favorite == this.favorite &&
           other.hidden == this.hidden &&
+          other.parentalLocked == this.parentalLocked &&
           other.sortOrder == this.sortOrder);
 }
 
@@ -1198,6 +1241,7 @@ class ChannelsCompanion extends UpdateCompanion<Channel> {
   final Value<String> streamType;
   final Value<bool> favorite;
   final Value<bool> hidden;
+  final Value<bool> parentalLocked;
   final Value<int> sortOrder;
   final Value<int> rowid;
   const ChannelsCompanion({
@@ -1213,6 +1257,7 @@ class ChannelsCompanion extends UpdateCompanion<Channel> {
     this.streamType = const Value.absent(),
     this.favorite = const Value.absent(),
     this.hidden = const Value.absent(),
+    this.parentalLocked = const Value.absent(),
     this.sortOrder = const Value.absent(),
     this.rowid = const Value.absent(),
   });
@@ -1229,6 +1274,7 @@ class ChannelsCompanion extends UpdateCompanion<Channel> {
     this.streamType = const Value.absent(),
     this.favorite = const Value.absent(),
     this.hidden = const Value.absent(),
+    this.parentalLocked = const Value.absent(),
     this.sortOrder = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
@@ -1248,6 +1294,7 @@ class ChannelsCompanion extends UpdateCompanion<Channel> {
     Expression<String>? streamType,
     Expression<bool>? favorite,
     Expression<bool>? hidden,
+    Expression<bool>? parentalLocked,
     Expression<int>? sortOrder,
     Expression<int>? rowid,
   }) {
@@ -1264,6 +1311,7 @@ class ChannelsCompanion extends UpdateCompanion<Channel> {
       if (streamType != null) 'stream_type': streamType,
       if (favorite != null) 'favorite': favorite,
       if (hidden != null) 'hidden': hidden,
+      if (parentalLocked != null) 'parental_locked': parentalLocked,
       if (sortOrder != null) 'sort_order': sortOrder,
       if (rowid != null) 'rowid': rowid,
     });
@@ -1282,6 +1330,7 @@ class ChannelsCompanion extends UpdateCompanion<Channel> {
     Value<String>? streamType,
     Value<bool>? favorite,
     Value<bool>? hidden,
+    Value<bool>? parentalLocked,
     Value<int>? sortOrder,
     Value<int>? rowid,
   }) {
@@ -1298,6 +1347,7 @@ class ChannelsCompanion extends UpdateCompanion<Channel> {
       streamType: streamType ?? this.streamType,
       favorite: favorite ?? this.favorite,
       hidden: hidden ?? this.hidden,
+      parentalLocked: parentalLocked ?? this.parentalLocked,
       sortOrder: sortOrder ?? this.sortOrder,
       rowid: rowid ?? this.rowid,
     );
@@ -1342,6 +1392,9 @@ class ChannelsCompanion extends UpdateCompanion<Channel> {
     if (hidden.present) {
       map['hidden'] = Variable<bool>(hidden.value);
     }
+    if (parentalLocked.present) {
+      map['parental_locked'] = Variable<bool>(parentalLocked.value);
+    }
     if (sortOrder.present) {
       map['sort_order'] = Variable<int>(sortOrder.value);
     }
@@ -1366,6 +1419,7 @@ class ChannelsCompanion extends UpdateCompanion<Channel> {
           ..write('streamType: $streamType, ')
           ..write('favorite: $favorite, ')
           ..write('hidden: $hidden, ')
+          ..write('parentalLocked: $parentalLocked, ')
           ..write('sortOrder: $sortOrder, ')
           ..write('rowid: $rowid')
           ..write(')'))
@@ -6008,6 +6062,771 @@ class FailoverGroupChannelsCompanion
   }
 }
 
+class $CategoryPreferencesTable extends CategoryPreferences
+    with TableInfo<$CategoryPreferencesTable, CategoryPreference> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CategoryPreferencesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _providerIdMeta = const VerificationMeta(
+    'providerId',
+  );
+  @override
+  late final GeneratedColumn<String> providerId = GeneratedColumn<String>(
+    'provider_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _groupTitleMeta = const VerificationMeta(
+    'groupTitle',
+  );
+  @override
+  late final GeneratedColumn<String> groupTitle = GeneratedColumn<String>(
+    'group_title',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _streamTypeMeta = const VerificationMeta(
+    'streamType',
+  );
+  @override
+  late final GeneratedColumn<String> streamType = GeneratedColumn<String>(
+    'stream_type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _hiddenMeta = const VerificationMeta('hidden');
+  @override
+  late final GeneratedColumn<bool> hidden = GeneratedColumn<bool>(
+    'hidden',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("hidden" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _parentalLockedMeta = const VerificationMeta(
+    'parentalLocked',
+  );
+  @override
+  late final GeneratedColumn<bool> parentalLocked = GeneratedColumn<bool>(
+    'parental_locked',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("parental_locked" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _isFavouriteMeta = const VerificationMeta(
+    'isFavourite',
+  );
+  @override
+  late final GeneratedColumn<bool> isFavourite = GeneratedColumn<bool>(
+    'is_favourite',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_favourite" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    providerId,
+    groupTitle,
+    streamType,
+    hidden,
+    parentalLocked,
+    isFavourite,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'category_preferences';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<CategoryPreference> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('provider_id')) {
+      context.handle(
+        _providerIdMeta,
+        providerId.isAcceptableOrUnknown(data['provider_id']!, _providerIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_providerIdMeta);
+    }
+    if (data.containsKey('group_title')) {
+      context.handle(
+        _groupTitleMeta,
+        groupTitle.isAcceptableOrUnknown(data['group_title']!, _groupTitleMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_groupTitleMeta);
+    }
+    if (data.containsKey('stream_type')) {
+      context.handle(
+        _streamTypeMeta,
+        streamType.isAcceptableOrUnknown(data['stream_type']!, _streamTypeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_streamTypeMeta);
+    }
+    if (data.containsKey('hidden')) {
+      context.handle(
+        _hiddenMeta,
+        hidden.isAcceptableOrUnknown(data['hidden']!, _hiddenMeta),
+      );
+    }
+    if (data.containsKey('parental_locked')) {
+      context.handle(
+        _parentalLockedMeta,
+        parentalLocked.isAcceptableOrUnknown(
+          data['parental_locked']!,
+          _parentalLockedMeta,
+        ),
+      );
+    }
+    if (data.containsKey('is_favourite')) {
+      context.handle(
+        _isFavouriteMeta,
+        isFavourite.isAcceptableOrUnknown(
+          data['is_favourite']!,
+          _isFavouriteMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {providerId, groupTitle, streamType};
+  @override
+  CategoryPreference map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CategoryPreference(
+      providerId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}provider_id'],
+      )!,
+      groupTitle: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}group_title'],
+      )!,
+      streamType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}stream_type'],
+      )!,
+      hidden: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}hidden'],
+      )!,
+      parentalLocked: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}parental_locked'],
+      )!,
+      isFavourite: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_favourite'],
+      )!,
+    );
+  }
+
+  @override
+  $CategoryPreferencesTable createAlias(String alias) {
+    return $CategoryPreferencesTable(attachedDatabase, alias);
+  }
+}
+
+class CategoryPreference extends DataClass
+    implements Insertable<CategoryPreference> {
+  final String providerId;
+  final String groupTitle;
+  final String streamType;
+  final bool hidden;
+  final bool parentalLocked;
+  final bool isFavourite;
+  const CategoryPreference({
+    required this.providerId,
+    required this.groupTitle,
+    required this.streamType,
+    required this.hidden,
+    required this.parentalLocked,
+    required this.isFavourite,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['provider_id'] = Variable<String>(providerId);
+    map['group_title'] = Variable<String>(groupTitle);
+    map['stream_type'] = Variable<String>(streamType);
+    map['hidden'] = Variable<bool>(hidden);
+    map['parental_locked'] = Variable<bool>(parentalLocked);
+    map['is_favourite'] = Variable<bool>(isFavourite);
+    return map;
+  }
+
+  CategoryPreferencesCompanion toCompanion(bool nullToAbsent) {
+    return CategoryPreferencesCompanion(
+      providerId: Value(providerId),
+      groupTitle: Value(groupTitle),
+      streamType: Value(streamType),
+      hidden: Value(hidden),
+      parentalLocked: Value(parentalLocked),
+      isFavourite: Value(isFavourite),
+    );
+  }
+
+  factory CategoryPreference.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CategoryPreference(
+      providerId: serializer.fromJson<String>(json['providerId']),
+      groupTitle: serializer.fromJson<String>(json['groupTitle']),
+      streamType: serializer.fromJson<String>(json['streamType']),
+      hidden: serializer.fromJson<bool>(json['hidden']),
+      parentalLocked: serializer.fromJson<bool>(json['parentalLocked']),
+      isFavourite: serializer.fromJson<bool>(json['isFavourite']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'providerId': serializer.toJson<String>(providerId),
+      'groupTitle': serializer.toJson<String>(groupTitle),
+      'streamType': serializer.toJson<String>(streamType),
+      'hidden': serializer.toJson<bool>(hidden),
+      'parentalLocked': serializer.toJson<bool>(parentalLocked),
+      'isFavourite': serializer.toJson<bool>(isFavourite),
+    };
+  }
+
+  CategoryPreference copyWith({
+    String? providerId,
+    String? groupTitle,
+    String? streamType,
+    bool? hidden,
+    bool? parentalLocked,
+    bool? isFavourite,
+  }) => CategoryPreference(
+    providerId: providerId ?? this.providerId,
+    groupTitle: groupTitle ?? this.groupTitle,
+    streamType: streamType ?? this.streamType,
+    hidden: hidden ?? this.hidden,
+    parentalLocked: parentalLocked ?? this.parentalLocked,
+    isFavourite: isFavourite ?? this.isFavourite,
+  );
+  CategoryPreference copyWithCompanion(CategoryPreferencesCompanion data) {
+    return CategoryPreference(
+      providerId: data.providerId.present
+          ? data.providerId.value
+          : this.providerId,
+      groupTitle: data.groupTitle.present
+          ? data.groupTitle.value
+          : this.groupTitle,
+      streamType: data.streamType.present
+          ? data.streamType.value
+          : this.streamType,
+      hidden: data.hidden.present ? data.hidden.value : this.hidden,
+      parentalLocked: data.parentalLocked.present
+          ? data.parentalLocked.value
+          : this.parentalLocked,
+      isFavourite: data.isFavourite.present
+          ? data.isFavourite.value
+          : this.isFavourite,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CategoryPreference(')
+          ..write('providerId: $providerId, ')
+          ..write('groupTitle: $groupTitle, ')
+          ..write('streamType: $streamType, ')
+          ..write('hidden: $hidden, ')
+          ..write('parentalLocked: $parentalLocked, ')
+          ..write('isFavourite: $isFavourite')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    providerId,
+    groupTitle,
+    streamType,
+    hidden,
+    parentalLocked,
+    isFavourite,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CategoryPreference &&
+          other.providerId == this.providerId &&
+          other.groupTitle == this.groupTitle &&
+          other.streamType == this.streamType &&
+          other.hidden == this.hidden &&
+          other.parentalLocked == this.parentalLocked &&
+          other.isFavourite == this.isFavourite);
+}
+
+class CategoryPreferencesCompanion extends UpdateCompanion<CategoryPreference> {
+  final Value<String> providerId;
+  final Value<String> groupTitle;
+  final Value<String> streamType;
+  final Value<bool> hidden;
+  final Value<bool> parentalLocked;
+  final Value<bool> isFavourite;
+  final Value<int> rowid;
+  const CategoryPreferencesCompanion({
+    this.providerId = const Value.absent(),
+    this.groupTitle = const Value.absent(),
+    this.streamType = const Value.absent(),
+    this.hidden = const Value.absent(),
+    this.parentalLocked = const Value.absent(),
+    this.isFavourite = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  CategoryPreferencesCompanion.insert({
+    required String providerId,
+    required String groupTitle,
+    required String streamType,
+    this.hidden = const Value.absent(),
+    this.parentalLocked = const Value.absent(),
+    this.isFavourite = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : providerId = Value(providerId),
+       groupTitle = Value(groupTitle),
+       streamType = Value(streamType);
+  static Insertable<CategoryPreference> custom({
+    Expression<String>? providerId,
+    Expression<String>? groupTitle,
+    Expression<String>? streamType,
+    Expression<bool>? hidden,
+    Expression<bool>? parentalLocked,
+    Expression<bool>? isFavourite,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (providerId != null) 'provider_id': providerId,
+      if (groupTitle != null) 'group_title': groupTitle,
+      if (streamType != null) 'stream_type': streamType,
+      if (hidden != null) 'hidden': hidden,
+      if (parentalLocked != null) 'parental_locked': parentalLocked,
+      if (isFavourite != null) 'is_favourite': isFavourite,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  CategoryPreferencesCompanion copyWith({
+    Value<String>? providerId,
+    Value<String>? groupTitle,
+    Value<String>? streamType,
+    Value<bool>? hidden,
+    Value<bool>? parentalLocked,
+    Value<bool>? isFavourite,
+    Value<int>? rowid,
+  }) {
+    return CategoryPreferencesCompanion(
+      providerId: providerId ?? this.providerId,
+      groupTitle: groupTitle ?? this.groupTitle,
+      streamType: streamType ?? this.streamType,
+      hidden: hidden ?? this.hidden,
+      parentalLocked: parentalLocked ?? this.parentalLocked,
+      isFavourite: isFavourite ?? this.isFavourite,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (providerId.present) {
+      map['provider_id'] = Variable<String>(providerId.value);
+    }
+    if (groupTitle.present) {
+      map['group_title'] = Variable<String>(groupTitle.value);
+    }
+    if (streamType.present) {
+      map['stream_type'] = Variable<String>(streamType.value);
+    }
+    if (hidden.present) {
+      map['hidden'] = Variable<bool>(hidden.value);
+    }
+    if (parentalLocked.present) {
+      map['parental_locked'] = Variable<bool>(parentalLocked.value);
+    }
+    if (isFavourite.present) {
+      map['is_favourite'] = Variable<bool>(isFavourite.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CategoryPreferencesCompanion(')
+          ..write('providerId: $providerId, ')
+          ..write('groupTitle: $groupTitle, ')
+          ..write('streamType: $streamType, ')
+          ..write('hidden: $hidden, ')
+          ..write('parentalLocked: $parentalLocked, ')
+          ..write('isFavourite: $isFavourite, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $WatchHistoryTable extends WatchHistory
+    with TableInfo<$WatchHistoryTable, WatchHistoryData> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $WatchHistoryTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _channelIdMeta = const VerificationMeta(
+    'channelId',
+  );
+  @override
+  late final GeneratedColumn<String> channelId = GeneratedColumn<String>(
+    'channel_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _positionSecondsMeta = const VerificationMeta(
+    'positionSeconds',
+  );
+  @override
+  late final GeneratedColumn<int> positionSeconds = GeneratedColumn<int>(
+    'position_seconds',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _durationSecondsMeta = const VerificationMeta(
+    'durationSeconds',
+  );
+  @override
+  late final GeneratedColumn<int> durationSeconds = GeneratedColumn<int>(
+    'duration_seconds',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    channelId,
+    positionSeconds,
+    durationSeconds,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'watch_history';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<WatchHistoryData> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('channel_id')) {
+      context.handle(
+        _channelIdMeta,
+        channelId.isAcceptableOrUnknown(data['channel_id']!, _channelIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_channelIdMeta);
+    }
+    if (data.containsKey('position_seconds')) {
+      context.handle(
+        _positionSecondsMeta,
+        positionSeconds.isAcceptableOrUnknown(
+          data['position_seconds']!,
+          _positionSecondsMeta,
+        ),
+      );
+    }
+    if (data.containsKey('duration_seconds')) {
+      context.handle(
+        _durationSecondsMeta,
+        durationSeconds.isAcceptableOrUnknown(
+          data['duration_seconds']!,
+          _durationSecondsMeta,
+        ),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {channelId};
+  @override
+  WatchHistoryData map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return WatchHistoryData(
+      channelId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}channel_id'],
+      )!,
+      positionSeconds: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}position_seconds'],
+      )!,
+      durationSeconds: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}duration_seconds'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $WatchHistoryTable createAlias(String alias) {
+    return $WatchHistoryTable(attachedDatabase, alias);
+  }
+}
+
+class WatchHistoryData extends DataClass
+    implements Insertable<WatchHistoryData> {
+  final String channelId;
+  final int positionSeconds;
+  final int durationSeconds;
+  final DateTime updatedAt;
+  const WatchHistoryData({
+    required this.channelId,
+    required this.positionSeconds,
+    required this.durationSeconds,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['channel_id'] = Variable<String>(channelId);
+    map['position_seconds'] = Variable<int>(positionSeconds);
+    map['duration_seconds'] = Variable<int>(durationSeconds);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  WatchHistoryCompanion toCompanion(bool nullToAbsent) {
+    return WatchHistoryCompanion(
+      channelId: Value(channelId),
+      positionSeconds: Value(positionSeconds),
+      durationSeconds: Value(durationSeconds),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory WatchHistoryData.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return WatchHistoryData(
+      channelId: serializer.fromJson<String>(json['channelId']),
+      positionSeconds: serializer.fromJson<int>(json['positionSeconds']),
+      durationSeconds: serializer.fromJson<int>(json['durationSeconds']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'channelId': serializer.toJson<String>(channelId),
+      'positionSeconds': serializer.toJson<int>(positionSeconds),
+      'durationSeconds': serializer.toJson<int>(durationSeconds),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  WatchHistoryData copyWith({
+    String? channelId,
+    int? positionSeconds,
+    int? durationSeconds,
+    DateTime? updatedAt,
+  }) => WatchHistoryData(
+    channelId: channelId ?? this.channelId,
+    positionSeconds: positionSeconds ?? this.positionSeconds,
+    durationSeconds: durationSeconds ?? this.durationSeconds,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  WatchHistoryData copyWithCompanion(WatchHistoryCompanion data) {
+    return WatchHistoryData(
+      channelId: data.channelId.present ? data.channelId.value : this.channelId,
+      positionSeconds: data.positionSeconds.present
+          ? data.positionSeconds.value
+          : this.positionSeconds,
+      durationSeconds: data.durationSeconds.present
+          ? data.durationSeconds.value
+          : this.durationSeconds,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('WatchHistoryData(')
+          ..write('channelId: $channelId, ')
+          ..write('positionSeconds: $positionSeconds, ')
+          ..write('durationSeconds: $durationSeconds, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(channelId, positionSeconds, durationSeconds, updatedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is WatchHistoryData &&
+          other.channelId == this.channelId &&
+          other.positionSeconds == this.positionSeconds &&
+          other.durationSeconds == this.durationSeconds &&
+          other.updatedAt == this.updatedAt);
+}
+
+class WatchHistoryCompanion extends UpdateCompanion<WatchHistoryData> {
+  final Value<String> channelId;
+  final Value<int> positionSeconds;
+  final Value<int> durationSeconds;
+  final Value<DateTime> updatedAt;
+  final Value<int> rowid;
+  const WatchHistoryCompanion({
+    this.channelId = const Value.absent(),
+    this.positionSeconds = const Value.absent(),
+    this.durationSeconds = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  WatchHistoryCompanion.insert({
+    required String channelId,
+    this.positionSeconds = const Value.absent(),
+    this.durationSeconds = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : channelId = Value(channelId);
+  static Insertable<WatchHistoryData> custom({
+    Expression<String>? channelId,
+    Expression<int>? positionSeconds,
+    Expression<int>? durationSeconds,
+    Expression<DateTime>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (channelId != null) 'channel_id': channelId,
+      if (positionSeconds != null) 'position_seconds': positionSeconds,
+      if (durationSeconds != null) 'duration_seconds': durationSeconds,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  WatchHistoryCompanion copyWith({
+    Value<String>? channelId,
+    Value<int>? positionSeconds,
+    Value<int>? durationSeconds,
+    Value<DateTime>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return WatchHistoryCompanion(
+      channelId: channelId ?? this.channelId,
+      positionSeconds: positionSeconds ?? this.positionSeconds,
+      durationSeconds: durationSeconds ?? this.durationSeconds,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (channelId.present) {
+      map['channel_id'] = Variable<String>(channelId.value);
+    }
+    if (positionSeconds.present) {
+      map['position_seconds'] = Variable<int>(positionSeconds.value);
+    }
+    if (durationSeconds.present) {
+      map['duration_seconds'] = Variable<int>(durationSeconds.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('WatchHistoryCompanion(')
+          ..write('channelId: $channelId, ')
+          ..write('positionSeconds: $positionSeconds, ')
+          ..write('durationSeconds: $durationSeconds, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -6027,6 +6846,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $FailoverGroupsTable failoverGroups = $FailoverGroupsTable(this);
   late final $FailoverGroupChannelsTable failoverGroupChannels =
       $FailoverGroupChannelsTable(this);
+  late final $CategoryPreferencesTable categoryPreferences =
+      $CategoryPreferencesTable(this);
+  late final $WatchHistoryTable watchHistory = $WatchHistoryTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -6045,6 +6867,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     scheduledRecordings,
     failoverGroups,
     failoverGroupChannels,
+    categoryPreferences,
+    watchHistory,
   ];
 }
 
@@ -6461,6 +7285,7 @@ typedef $$ChannelsTableCreateCompanionBuilder =
       Value<String> streamType,
       Value<bool> favorite,
       Value<bool> hidden,
+      Value<bool> parentalLocked,
       Value<int> sortOrder,
       Value<int> rowid,
     });
@@ -6478,6 +7303,7 @@ typedef $$ChannelsTableUpdateCompanionBuilder =
       Value<String> streamType,
       Value<bool> favorite,
       Value<bool> hidden,
+      Value<bool> parentalLocked,
       Value<int> sortOrder,
       Value<int> rowid,
     });
@@ -6641,6 +7467,11 @@ class $$ChannelsTableFilterComposer
 
   ColumnFilters<bool> get hidden => $composableBuilder(
     column: $table.hidden,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get parentalLocked => $composableBuilder(
+    column: $table.parentalLocked,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -6813,6 +7644,11 @@ class $$ChannelsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get parentalLocked => $composableBuilder(
+    column: $table.parentalLocked,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get sortOrder => $composableBuilder(
     column: $table.sortOrder,
     builder: (column) => ColumnOrderings(column),
@@ -6889,6 +7725,11 @@ class $$ChannelsTableAnnotationComposer
 
   GeneratedColumn<bool> get hidden =>
       $composableBuilder(column: $table.hidden, builder: (column) => column);
+
+  GeneratedColumn<bool> get parentalLocked => $composableBuilder(
+    column: $table.parentalLocked,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<int> get sortOrder =>
       $composableBuilder(column: $table.sortOrder, builder: (column) => column);
@@ -7039,6 +7880,7 @@ class $$ChannelsTableTableManager
                 Value<String> streamType = const Value.absent(),
                 Value<bool> favorite = const Value.absent(),
                 Value<bool> hidden = const Value.absent(),
+                Value<bool> parentalLocked = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => ChannelsCompanion(
@@ -7054,6 +7896,7 @@ class $$ChannelsTableTableManager
                 streamType: streamType,
                 favorite: favorite,
                 hidden: hidden,
+                parentalLocked: parentalLocked,
                 sortOrder: sortOrder,
                 rowid: rowid,
               ),
@@ -7071,6 +7914,7 @@ class $$ChannelsTableTableManager
                 Value<String> streamType = const Value.absent(),
                 Value<bool> favorite = const Value.absent(),
                 Value<bool> hidden = const Value.absent(),
+                Value<bool> parentalLocked = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => ChannelsCompanion.insert(
@@ -7086,6 +7930,7 @@ class $$ChannelsTableTableManager
                 streamType: streamType,
                 favorite: favorite,
                 hidden: hidden,
+                parentalLocked: parentalLocked,
                 sortOrder: sortOrder,
                 rowid: rowid,
               ),
@@ -11165,6 +12010,436 @@ typedef $$FailoverGroupChannelsTableProcessedTableManager =
       FailoverGroupChannel,
       PrefetchHooks Function({bool groupId, bool channelId})
     >;
+typedef $$CategoryPreferencesTableCreateCompanionBuilder =
+    CategoryPreferencesCompanion Function({
+      required String providerId,
+      required String groupTitle,
+      required String streamType,
+      Value<bool> hidden,
+      Value<bool> parentalLocked,
+      Value<bool> isFavourite,
+      Value<int> rowid,
+    });
+typedef $$CategoryPreferencesTableUpdateCompanionBuilder =
+    CategoryPreferencesCompanion Function({
+      Value<String> providerId,
+      Value<String> groupTitle,
+      Value<String> streamType,
+      Value<bool> hidden,
+      Value<bool> parentalLocked,
+      Value<bool> isFavourite,
+      Value<int> rowid,
+    });
+
+class $$CategoryPreferencesTableFilterComposer
+    extends Composer<_$AppDatabase, $CategoryPreferencesTable> {
+  $$CategoryPreferencesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get providerId => $composableBuilder(
+    column: $table.providerId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get groupTitle => $composableBuilder(
+    column: $table.groupTitle,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get streamType => $composableBuilder(
+    column: $table.streamType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get hidden => $composableBuilder(
+    column: $table.hidden,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get parentalLocked => $composableBuilder(
+    column: $table.parentalLocked,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isFavourite => $composableBuilder(
+    column: $table.isFavourite,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$CategoryPreferencesTableOrderingComposer
+    extends Composer<_$AppDatabase, $CategoryPreferencesTable> {
+  $$CategoryPreferencesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get providerId => $composableBuilder(
+    column: $table.providerId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get groupTitle => $composableBuilder(
+    column: $table.groupTitle,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get streamType => $composableBuilder(
+    column: $table.streamType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get hidden => $composableBuilder(
+    column: $table.hidden,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get parentalLocked => $composableBuilder(
+    column: $table.parentalLocked,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isFavourite => $composableBuilder(
+    column: $table.isFavourite,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$CategoryPreferencesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $CategoryPreferencesTable> {
+  $$CategoryPreferencesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get providerId => $composableBuilder(
+    column: $table.providerId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get groupTitle => $composableBuilder(
+    column: $table.groupTitle,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get streamType => $composableBuilder(
+    column: $table.streamType,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get hidden =>
+      $composableBuilder(column: $table.hidden, builder: (column) => column);
+
+  GeneratedColumn<bool> get parentalLocked => $composableBuilder(
+    column: $table.parentalLocked,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get isFavourite => $composableBuilder(
+    column: $table.isFavourite,
+    builder: (column) => column,
+  );
+}
+
+class $$CategoryPreferencesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $CategoryPreferencesTable,
+          CategoryPreference,
+          $$CategoryPreferencesTableFilterComposer,
+          $$CategoryPreferencesTableOrderingComposer,
+          $$CategoryPreferencesTableAnnotationComposer,
+          $$CategoryPreferencesTableCreateCompanionBuilder,
+          $$CategoryPreferencesTableUpdateCompanionBuilder,
+          (
+            CategoryPreference,
+            BaseReferences<
+              _$AppDatabase,
+              $CategoryPreferencesTable,
+              CategoryPreference
+            >,
+          ),
+          CategoryPreference,
+          PrefetchHooks Function()
+        > {
+  $$CategoryPreferencesTableTableManager(
+    _$AppDatabase db,
+    $CategoryPreferencesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$CategoryPreferencesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$CategoryPreferencesTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$CategoryPreferencesTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> providerId = const Value.absent(),
+                Value<String> groupTitle = const Value.absent(),
+                Value<String> streamType = const Value.absent(),
+                Value<bool> hidden = const Value.absent(),
+                Value<bool> parentalLocked = const Value.absent(),
+                Value<bool> isFavourite = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CategoryPreferencesCompanion(
+                providerId: providerId,
+                groupTitle: groupTitle,
+                streamType: streamType,
+                hidden: hidden,
+                parentalLocked: parentalLocked,
+                isFavourite: isFavourite,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String providerId,
+                required String groupTitle,
+                required String streamType,
+                Value<bool> hidden = const Value.absent(),
+                Value<bool> parentalLocked = const Value.absent(),
+                Value<bool> isFavourite = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CategoryPreferencesCompanion.insert(
+                providerId: providerId,
+                groupTitle: groupTitle,
+                streamType: streamType,
+                hidden: hidden,
+                parentalLocked: parentalLocked,
+                isFavourite: isFavourite,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$CategoryPreferencesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $CategoryPreferencesTable,
+      CategoryPreference,
+      $$CategoryPreferencesTableFilterComposer,
+      $$CategoryPreferencesTableOrderingComposer,
+      $$CategoryPreferencesTableAnnotationComposer,
+      $$CategoryPreferencesTableCreateCompanionBuilder,
+      $$CategoryPreferencesTableUpdateCompanionBuilder,
+      (
+        CategoryPreference,
+        BaseReferences<
+          _$AppDatabase,
+          $CategoryPreferencesTable,
+          CategoryPreference
+        >,
+      ),
+      CategoryPreference,
+      PrefetchHooks Function()
+    >;
+typedef $$WatchHistoryTableCreateCompanionBuilder =
+    WatchHistoryCompanion Function({
+      required String channelId,
+      Value<int> positionSeconds,
+      Value<int> durationSeconds,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+typedef $$WatchHistoryTableUpdateCompanionBuilder =
+    WatchHistoryCompanion Function({
+      Value<String> channelId,
+      Value<int> positionSeconds,
+      Value<int> durationSeconds,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+
+class $$WatchHistoryTableFilterComposer
+    extends Composer<_$AppDatabase, $WatchHistoryTable> {
+  $$WatchHistoryTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get channelId => $composableBuilder(
+    column: $table.channelId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get positionSeconds => $composableBuilder(
+    column: $table.positionSeconds,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get durationSeconds => $composableBuilder(
+    column: $table.durationSeconds,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$WatchHistoryTableOrderingComposer
+    extends Composer<_$AppDatabase, $WatchHistoryTable> {
+  $$WatchHistoryTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get channelId => $composableBuilder(
+    column: $table.channelId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get positionSeconds => $composableBuilder(
+    column: $table.positionSeconds,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get durationSeconds => $composableBuilder(
+    column: $table.durationSeconds,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$WatchHistoryTableAnnotationComposer
+    extends Composer<_$AppDatabase, $WatchHistoryTable> {
+  $$WatchHistoryTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get channelId =>
+      $composableBuilder(column: $table.channelId, builder: (column) => column);
+
+  GeneratedColumn<int> get positionSeconds => $composableBuilder(
+    column: $table.positionSeconds,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get durationSeconds => $composableBuilder(
+    column: $table.durationSeconds,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$WatchHistoryTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $WatchHistoryTable,
+          WatchHistoryData,
+          $$WatchHistoryTableFilterComposer,
+          $$WatchHistoryTableOrderingComposer,
+          $$WatchHistoryTableAnnotationComposer,
+          $$WatchHistoryTableCreateCompanionBuilder,
+          $$WatchHistoryTableUpdateCompanionBuilder,
+          (
+            WatchHistoryData,
+            BaseReferences<_$AppDatabase, $WatchHistoryTable, WatchHistoryData>,
+          ),
+          WatchHistoryData,
+          PrefetchHooks Function()
+        > {
+  $$WatchHistoryTableTableManager(_$AppDatabase db, $WatchHistoryTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$WatchHistoryTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$WatchHistoryTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$WatchHistoryTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> channelId = const Value.absent(),
+                Value<int> positionSeconds = const Value.absent(),
+                Value<int> durationSeconds = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => WatchHistoryCompanion(
+                channelId: channelId,
+                positionSeconds: positionSeconds,
+                durationSeconds: durationSeconds,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String channelId,
+                Value<int> positionSeconds = const Value.absent(),
+                Value<int> durationSeconds = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => WatchHistoryCompanion.insert(
+                channelId: channelId,
+                positionSeconds: positionSeconds,
+                durationSeconds: durationSeconds,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$WatchHistoryTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $WatchHistoryTable,
+      WatchHistoryData,
+      $$WatchHistoryTableFilterComposer,
+      $$WatchHistoryTableOrderingComposer,
+      $$WatchHistoryTableAnnotationComposer,
+      $$WatchHistoryTableCreateCompanionBuilder,
+      $$WatchHistoryTableUpdateCompanionBuilder,
+      (
+        WatchHistoryData,
+        BaseReferences<_$AppDatabase, $WatchHistoryTable, WatchHistoryData>,
+      ),
+      WatchHistoryData,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -11195,4 +12470,8 @@ class $AppDatabaseManager {
       $$FailoverGroupsTableTableManager(_db, _db.failoverGroups);
   $$FailoverGroupChannelsTableTableManager get failoverGroupChannels =>
       $$FailoverGroupChannelsTableTableManager(_db, _db.failoverGroupChannels);
+  $$CategoryPreferencesTableTableManager get categoryPreferences =>
+      $$CategoryPreferencesTableTableManager(_db, _db.categoryPreferences);
+  $$WatchHistoryTableTableManager get watchHistory =>
+      $$WatchHistoryTableTableManager(_db, _db.watchHistory);
 }

@@ -34,10 +34,35 @@ class Channels extends Table {
   TextColumn get streamType => text().withDefault(const Constant('live'))();
   BoolColumn get favorite => boolean().withDefault(const Constant(false))();
   BoolColumn get hidden => boolean().withDefault(const Constant(false))();
+  BoolColumn get parentalLocked => boolean().withDefault(const Constant(false))();
   IntColumn get sortOrder => integer().withDefault(const Constant(0))();
 
   @override
   Set<Column> get primaryKey => {id};
+}
+
+/// Per-category preferences (hide / parental-lock / favourite an entire group).
+class CategoryPreferences extends Table {
+  TextColumn get providerId => text()();
+  TextColumn get groupTitle => text()();
+  TextColumn get streamType => text()(); // 'live', 'vod', 'series'
+  BoolColumn get hidden => boolean().withDefault(const Constant(false))();
+  BoolColumn get parentalLocked => boolean().withDefault(const Constant(false))();
+  BoolColumn get isFavourite => boolean().withDefault(const Constant(false))();
+
+  @override
+  Set<Column> get primaryKey => {providerId, groupTitle, streamType};
+}
+
+/// Watch history — stores playback position for continue-watching.
+class WatchHistory extends Table {
+  TextColumn get channelId => text()();
+  IntColumn get positionSeconds => integer().withDefault(const Constant(0))();
+  IntColumn get durationSeconds => integer().withDefault(const Constant(0))();
+  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
+
+  @override
+  Set<Column> get primaryKey => {channelId};
 }
 
 /// EPG data sources (XMLTV feeds).

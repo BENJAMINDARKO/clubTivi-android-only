@@ -125,7 +125,7 @@ class TraktClient {
             ? DateTime.tryParse(json['first_aired'] as String)
             : null,
         traktId: (json['ids'] as Map<String, dynamic>?)?['trakt'] as int?,
-        tmdbId: (json['ids'] as Map<String, dynamic>?)?['tmdb'] as int?,
+        cinemetaId: (json['ids'] as Map<String, dynamic>?)?['imdb'] as String?,
       );
     }).toList();
   }
@@ -150,7 +150,7 @@ class TraktClient {
             ? DateTime.tryParse(json['first_aired'] as String)
             : null,
         traktId: (json['ids'] as Map<String, dynamic>?)?['trakt'] as int?,
-        tmdbId: (json['ids'] as Map<String, dynamic>?)?['tmdb'] as int?,
+        cinemetaId: (json['ids'] as Map<String, dynamic>?)?['imdb'] as String?,
       );
     }).toList();
   }
@@ -181,7 +181,7 @@ class TraktClient {
     return Show(
       traktId: ids['trakt'] as int? ?? 0,
       imdbId: ids['imdb'] as String?,
-      tmdbId: ids['tmdb'] as int?,
+      cinemetaId: ids['imdb'] as String?,
       title: json['title'] as String? ?? 'Unknown',
       year: json['year'] as int?,
       overview: json['overview'] as String?,

@@ -77,35 +77,59 @@ class PlayerService {
           logLevel: MPVLogLevel.warn,
         ),
       );
+      _videoController ??= VideoController(_player!);
       _initPlayer(_player!);
     }
     return _player!;
   }
 
   Future<void> _initPlayer(Player p) async {
-    final np = p.platform;
-    if (np is native_player.NativePlayer) {
-      // Downmix surround to stereo for output compatibility
-      await np.setProperty('audio-channels', 'stereo');
-      // Normalize volume when downmixing surround to stereo
-      await np.setProperty('audio-normalize-downmix', 'yes');
-      // EBU R128 loudness normalization — keeps volume consistent across streams
-      await np.setProperty('af', 'loudnorm=I=-14:TP=-1:LRA=13');
-      // Disable SPDIF passthrough which can cause silent output
-      await np.setProperty('audio-spdif', '');
-      // Volume
-      await np.setProperty('volume', '100');
-      await np.setProperty('mute', 'no');
-      // Android TV: enable hardware decoding and optimize buffering
-      if (Platform.isAndroid) {
-        await np.setProperty('hwdec', 'mediacodec-copy');
-        await np.setProperty('vo', 'gpu');
-        await np.setProperty('framedrop', 'vo');
+    try {
+      final np = p.platform;
+      if (np is native_player.NativePlayer) {
+        // ── Hardware decoding ──
+        // Enforce hardware decoding on all platforms. On budget devices like Firestick, 
+        // this is crucial for 4K/8K to be smooth.
+        await np.setProperty('hwdec', 'auto');
+        
+        // Use a faster profile if possible to speed up initial connection.
+        await np.setProperty('profile', 'fast');
+
+        // ── Audio ──
+        // Downmix surround to stereo for output compatibility
+        await np.setProperty('audio-channels', 'stereo');
+        // Normalize volume when downmixing surround to stereo
+        await np.setProperty('audio-normalize-downmix', 'yes');
+        // EBU R128 loudness normalization — keeps volume consistent across streams
+        await np.setProperty('af', 'loudnorm=I=-14:TP=-1:LRA=13');
+        // Disable SPDIF passthrough which can cause silent output
+        await np.setProperty('audio-spdif', '');
+        // Volume
+        await np.setProperty('volume', '100');
+        await np.setProperty('mute', 'no');
+
+        // ── Network / buffering ──
+        // Increase network timeout to avoid premature disconnects
+        await np.setProperty('network-timeout', '60');
+        // Cache up to 30 seconds of video ahead of time to smooth out network fluctuations
+        await np.setProperty('demuxer-readahead-secs', '30');
+        // Allow up to 128MB of memory for the cache (safely handles 4K IPTV streams)
+        await np.setProperty('demuxer-max-bytes', '128MiB');
+        await np.setProperty('cache', 'yes');
+        // Start playing instantly without pausing for cache to fill
+        await np.setProperty('cache-pause', 'no');
+        // Use a much larger network stream buffer
+        await np.setProperty('stream-buffer-size', '16MiB');
+      }
+      await p.setVolume(100);
+    } catch (e) {
+      debugPrint('[Player] Error initializing properties: $e');
+    } finally {
+      if (!_playerReady) {
+        _playerReady = true;
+        _playerReadyCompleter.complete();
       }
     }
-    await p.setVolume(100);
-    _playerReady = true;
-    _playerReadyCompleter.complete();
   }
 
   /// Wait for player properties to be applied before playback.
@@ -228,6 +252,9 @@ class PlayerService {
   /// Stop playback.
   Future<void> stop() async {
     _bufferManager.stop();
+    _failoverCheckTimer?.cancel();
+    _bufferTrackTimer?.cancel();
+    _disposeWarmPlayer();
     await player.stop();
   }
 

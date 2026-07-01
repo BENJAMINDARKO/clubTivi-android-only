@@ -54,6 +54,29 @@ class ClubTiviTheme {
           }),
         ),
       ),
+      // Elevated button focus styling
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          minimumSize: const Size(64, 48),
+        ).copyWith(
+          elevation: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.focused)) return 8;
+            return 2;
+          }),
+          side: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.focused)) {
+              return const BorderSide(color: Colors.white, width: 3);
+            }
+            return null;
+          }),
+          backgroundColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.focused)) {
+              return _accent.withValues(alpha: 0.8);
+            }
+            return null; // fallback to individual button style
+          }),
+        ),
+      ),
       // Text button focus styling
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
@@ -62,6 +85,25 @@ class ClubTiviTheme {
           side: WidgetStateProperty.resolveWith((states) {
             if (states.contains(WidgetState.focused)) {
               return const BorderSide(color: _accent, width: 2);
+            }
+            return null;
+          }),
+        ),
+      ),
+      // Outlined button focus styling
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size(64, 48),
+        ).copyWith(
+          side: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.focused)) {
+              return const BorderSide(color: Colors.white, width: 3);
+            }
+            return const BorderSide(color: Colors.white24, width: 1);
+          }),
+          backgroundColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.focused)) {
+              return _accent.withValues(alpha: 0.3);
             }
             return null;
           }),

@@ -4,7 +4,7 @@ import 'package:equatable/equatable.dart';
 class Show extends Equatable {
   final int traktId;
   final String? imdbId;
-  final int? tmdbId;
+  final String? cinemetaId;
   final String title;
   final int? year;
   final String? overview;
@@ -23,7 +23,7 @@ class Show extends Equatable {
   const Show({
     required this.traktId,
     this.imdbId,
-    this.tmdbId,
+    this.cinemetaId,
     required this.title,
     this.year,
     this.overview,
@@ -54,7 +54,7 @@ class Show extends Equatable {
     return Show(
       traktId: traktId,
       imdbId: imdbId ?? this.imdbId,
-      tmdbId: tmdbId,
+      cinemetaId: cinemetaId,
       title: title,
       year: year,
       overview: overview ?? this.overview,
@@ -89,7 +89,7 @@ class Season extends Equatable {
   final String? posterUrl;
   final DateTime? firstAired;
   final int? traktId;
-  final int? tmdbId;
+  final String? cinemetaId;
 
   const Season({
     required this.number,
@@ -101,7 +101,7 @@ class Season extends Equatable {
     this.posterUrl,
     this.firstAired,
     this.traktId,
-    this.tmdbId,
+    this.cinemetaId,
   });
 
   String get displayTitle => title ?? 'Season $number';
@@ -122,7 +122,7 @@ class Episode extends Equatable {
   final DateTime? firstAired;
   final String? stillUrl; // episode screenshot
   final int? traktId;
-  final int? tmdbId;
+  final String? cinemetaId;
 
   const Episode({
     required this.season,
@@ -135,7 +135,7 @@ class Episode extends Equatable {
     this.firstAired,
     this.stillUrl,
     this.traktId,
-    this.tmdbId,
+    this.cinemetaId,
   });
 
   String get displayTitle => title ?? 'Episode $number';

@@ -41,10 +41,10 @@ class _SplashScreenState extends State<SplashScreen>
   void initState() {
     super.initState();
 
-    // Shorter duration on TV to reduce GPU work
+    // Shorter duration on TV to reduce GPU work and improve snappiness
     _controller = AnimationController(
       vsync: this,
-      duration: Duration(milliseconds: _isTV ? 2000 : 3500),
+      duration: Duration(milliseconds: _isTV ? 500 : 3500),
     );
 
     // Glow pulse: only on desktop (continuous loop is expensive on TV GPUs)

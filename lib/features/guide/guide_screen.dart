@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/fuzzy_match.dart';
 import '../../data/datasources/local/database.dart' as db;
+import '../media_shared_widgets.dart';
 import '../providers/provider_manager.dart';
 
 /// EPG program guide — horizontal timeline grid view.
@@ -207,38 +208,11 @@ class _GuideScreenState extends ConsumerState<GuideScreen> {
               ),
               const Divider(height: 1),
               // Search bar
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 12, vertical: 6),
-                child: TextField(
-                  controller: _searchController,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: InputDecoration(
-                    hintText: 'Search channels...',
-                    hintStyle: const TextStyle(color: Colors.white38),
-                    prefixIcon:
-                        const Icon(Icons.search, color: Colors.white38),
-                    suffixIcon: _searchQuery.isNotEmpty
-                        ? IconButton(
-                            icon: const Icon(Icons.clear,
-                                color: Colors.white38),
-                            onPressed: () {
-                              _searchController.clear();
-                              setState(() => _searchQuery = '');
-                            },
-                          )
-                        : null,
-                    filled: true,
-                    fillColor: const Color(0xFF16213E),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide.none,
-                    ),
-                    contentPadding:
-                        const EdgeInsets.symmetric(vertical: 10),
-                  ),
-                  onChanged: (v) => setState(() => _searchQuery = v),
-                ),
+              MediaSearchBar(
+                controller: _searchController,
+                focusNode: _focusNode,
+                hint: 'Search channels...',
+                onChanged: (v) => setState(() => _searchQuery = v),
               ),
               // Channel rows
               Expanded(

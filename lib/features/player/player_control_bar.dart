@@ -1,7 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:volume_controller/volume_controller.dart';
 
 import 'player_service.dart';
 
@@ -11,11 +13,11 @@ import 'player_service.dart';
 /// - Top row: volume, resolution badge, transport controls, action icons
 /// - Bottom row: position, seek bar, duration
 class PlayerControlBar extends ConsumerStatefulWidget {
-  final VoidCallback? onCastTap;
+  final VoidCallback? onPrevChannel;
+  final VoidCallback? onNextChannel;
   final VoidCallback? onBackTap;
   final VoidCallback? onScreenshot;
   final VoidCallback? onFavorite;
-  final VoidCallback? onPip;
   final VoidCallback? onInfo;
   final VoidCallback? onSettings;
   final VoidCallback? onChannelList;
@@ -23,19 +25,20 @@ class PlayerControlBar extends ConsumerStatefulWidget {
   final VoidCallback? onSubtitleToggle;
   final VoidCallback? onSubtitleSelect;
   final VoidCallback? onAudioSelect;
-  final bool isCasting;
   final bool isFavorite;
   final bool hasSubtitles;
   final bool subtitlesEnabled;
   final int audioTrackCount;
+  final double volume;
+  final bool visible;
 
   const PlayerControlBar({
     super.key,
-    this.onCastTap,
+    this.onPrevChannel,
+    this.onNextChannel,
     this.onBackTap,
     this.onScreenshot,
     this.onFavorite,
-    this.onPip,
     this.onInfo,
     this.onSettings,
     this.onChannelList,
@@ -43,11 +46,12 @@ class PlayerControlBar extends ConsumerStatefulWidget {
     this.onSubtitleToggle,
     this.onSubtitleSelect,
     this.onAudioSelect,
-    this.isCasting = false,
     this.isFavorite = false,
     this.hasSubtitles = false,
     this.subtitlesEnabled = false,
     this.audioTrackCount = 0,
+    required this.volume,
+    this.visible = true,
   });
 
   @override
@@ -55,12 +59,7 @@ class PlayerControlBar extends ConsumerStatefulWidget {
 }
 
 class _PlayerControlBarState extends ConsumerState<PlayerControlBar> {
-  bool _visible = true;
-  bool _isHoveringBar = false;
-  Timer? _hideTimer;
-
   // Player state cached from streams
-  double _volume = 100.0;
   bool _playing = false;
   Duration _position = Duration.zero;
   Duration _duration = Duration.zero;
@@ -68,6 +67,8 @@ class _PlayerControlBarState extends ConsumerState<PlayerControlBar> {
   int? _videoHeight;
   bool _isSeeking = false;
   double _seekValue = 0.0;
+
+  final FocusNode _playPauseFocusNode = FocusNode();
 
   // Mute toggle state
   double _preMuteVolume = 100.0;
@@ -84,9 +85,16 @@ class _PlayerControlBarState extends ConsumerState<PlayerControlBar> {
   @override
   void initState() {
     super.initState();
-    _scheduleHide();
     _subscribeToPlayer();
     _startInfoPolling();
+  }
+
+  @override
+  void didUpdateWidget(PlayerControlBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.visible && !oldWidget.visible) {
+      _playPauseFocusNode.requestFocus();
+    }
   }
 
   void _startInfoPolling() {
@@ -127,16 +135,12 @@ class _PlayerControlBarState extends ConsumerState<PlayerControlBar> {
     final ps = ref.read(playerServiceProvider);
     final player = ps.player;
 
-    _volume = player.state.volume;
     _playing = player.state.playing;
     _position = player.state.position;
     _duration = player.state.duration;
     _videoWidth = player.state.width;
     _videoHeight = player.state.height;
 
-    _subs.add(player.stream.volume.listen((v) {
-      if (mounted) setState(() => _volume = v);
-    }));
     _subs.add(player.stream.playing.listen((p) {
       if (mounted) setState(() => _playing = p);
     }));
@@ -152,23 +156,6 @@ class _PlayerControlBarState extends ConsumerState<PlayerControlBar> {
     _subs.add(player.stream.height.listen((h) {
       if (mounted) setState(() => _videoHeight = h);
     }));
-  }
-
-  // --- Visibility / auto-hide ---
-
-  void _scheduleHide() {
-    _hideTimer?.cancel();
-    if (_isHoveringBar) return; // don't hide while mouse is over the bar
-    _hideTimer = Timer(const Duration(seconds: 5), () {
-      if (mounted && !_isHoveringBar) setState(() => _visible = false);
-    });
-  }
-
-  void _onInteraction() {
-    if (!_visible) {
-      setState(() => _visible = true);
-    }
-    _scheduleHide();
   }
 
   // --- Helpers ---
@@ -203,7 +190,7 @@ class _PlayerControlBarState extends ConsumerState<PlayerControlBar> {
 
   @override
   void dispose() {
-    _hideTimer?.cancel();
+    _playPauseFocusNode.dispose();
     _fpsTimer?.cancel();
     for (final s in _subs) {
       s.cancel();
@@ -213,29 +200,15 @@ class _PlayerControlBarState extends ConsumerState<PlayerControlBar> {
 
   @override
   Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) {
-        _isHoveringBar = true;
-        _hideTimer?.cancel();
-        if (!_visible) setState(() => _visible = true);
-      },
-      onExit: (_) {
-        _isHoveringBar = false;
-        _scheduleHide();
-      },
-      onHover: (_) => _onInteraction(),
-      child: GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        onTap: _onInteraction,
-        child: AnimatedOpacity(
-          opacity: _visible ? 1.0 : 0.0,
-          duration: const Duration(milliseconds: 300),
-          child: IgnorePointer(
-            ignoring: !_visible,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                // ── Top row ──
+    return AnimatedOpacity(
+      opacity: widget.visible ? 1.0 : 0.0,
+      duration: const Duration(milliseconds: 300),
+      child: IgnorePointer(
+        ignoring: !widget.visible,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            // ── Top row ──
                 Container(
                   color: Colors.black.withValues(alpha: 0.7),
                   padding:
@@ -244,93 +217,24 @@ class _PlayerControlBarState extends ConsumerState<PlayerControlBar> {
                     children: [
                       // Back button
                       _iconBtn(Icons.arrow_back, onTap: widget.onBackTap),
-                      const SizedBox(width: 4),
-
-                      // Volume icon (tap to toggle mute) + slider
-                      GestureDetector(
-                        onTap: () {
-                          if (_volume > 0) {
-                            _preMuteVolume = _volume;
-                            setState(() => _volume = 0);
-                            ref.read(playerServiceProvider).setVolume(0);
-                          } else {
-                            setState(() => _volume = _preMuteVolume > 0 ? _preMuteVolume : 100);
-                            ref.read(playerServiceProvider).setVolume(_volume);
-                          }
-                          _scheduleHide();
-                        },
-                        child: Icon(
-                          _volume == 0
-                              ? Icons.volume_off
-                              : _volume < 50
-                                  ? Icons.volume_down
-                                  : Icons.volume_up,
-                          color: Colors.white,
-                          size: 20,
-                        ),
-                      ),
-                      SizedBox(
-                        width: 100,
-                        child: SliderTheme(
-                          data: SliderTheme.of(context).copyWith(
-                            trackHeight: 3,
-                            thumbShape: const RoundSliderThumbShape(
-                                enabledThumbRadius: 6),
-                            overlayShape: const RoundSliderOverlayShape(
-                                overlayRadius: 12),
-                            activeTrackColor: Colors.white,
-                            inactiveTrackColor: Colors.white24,
-                            thumbColor: Colors.white,
-                          ),
-                          child: Slider(
-                            value: _volume,
-                            min: 0,
-                            max: 100,
-                            onChanged: (v) {
-                              setState(() => _volume = v);
-                              ref.read(playerServiceProvider).setVolume(v);
-                              _scheduleHide();
-                            },
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-
-                      // Record
-                      _iconBtn(Icons.fiber_manual_record,
-                          color: Colors.red.shade400,
-                          size: 16,
-                          onTap: () => _comingSoon('Recording')),
 
                       const Spacer(),
 
                       // ── Transport controls (center) ──
-                      _iconBtn(Icons.fast_rewind, onTap: () {
-                        final ps = ref.read(playerServiceProvider);
-                        final target = _position - const Duration(seconds: 10);
-                        ps.player.seek(target < Duration.zero
-                            ? Duration.zero
-                            : target);
-                        _scheduleHide();
-                      }),
+                      _iconBtn(Icons.skip_previous, onTap: widget.onPrevChannel),
                       const SizedBox(width: 12),
                       _iconBtn(
                         _playing ? Icons.pause : Icons.play_arrow,
                         size: 32,
+                        focusNode: _playPauseFocusNode,
                         onTap: () {
                           final ps = ref.read(playerServiceProvider);
                           _playing ? ps.pause() : ps.resume();
-                          _scheduleHide();
+
                         },
                       ),
                       const SizedBox(width: 12),
-                      _iconBtn(Icons.fast_forward, onTap: () {
-                        final ps = ref.read(playerServiceProvider);
-                        final target = _position + const Duration(seconds: 10);
-                        ps.player.seek(
-                            target > _duration ? _duration : target);
-                        _scheduleHide();
-                      }),
+                      _iconBtn(Icons.skip_next, onTap: widget.onNextChannel),
 
                       const Spacer(),
 
@@ -389,23 +293,7 @@ class _PlayerControlBarState extends ConsumerState<PlayerControlBar> {
                         color: widget.isFavorite ? Colors.amber : Colors.white,
                         onTap: widget.onFavorite,
                       ),
-                      _iconBtn(Icons.picture_in_picture_alt,
-                          onTap: widget.onPip),
-                      _iconBtn(
-                        widget.isCasting
-                            ? Icons.cast_connected
-                            : Icons.cast,
-                        color:
-                            widget.isCasting ? Colors.amber : Colors.white,
-                        onTap: widget.onCastTap,
-                      ),
-                      _iconBtn(Icons.info_outline,
-                          onTap: widget.onInfo),
-                      _iconBtn(Icons.edit_outlined,
-                          onTap: widget.onRename),
-                      _iconBtn(Icons.settings,
-                          onTap: widget.onSettings),
-                      _iconBtn(Icons.list,
+                      _iconBtn(Icons.menu,
                           onTap: widget.onChannelList),
                       _badge('EPG', fontSize: 10),
                       const SizedBox(width: 6),
@@ -442,93 +330,91 @@ class _PlayerControlBarState extends ConsumerState<PlayerControlBar> {
                   ),
                 ),
 
-                // ── Bottom row: seek bar ──
-                Container(
-                  color: Colors.black.withValues(alpha: 0.7),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-                  child: Row(
-                    children: [
-                      Text(
-                        _formatDuration(
-                            _isSeeking
-                                ? Duration(
-                                    milliseconds: _seekValue.round())
-                                : _position),
-                        style: const TextStyle(
-                            color: Colors.white70, fontSize: 12),
-                      ),
-                      Expanded(
-                        child: SliderTheme(
-                          data: SliderTheme.of(context).copyWith(
-                            trackHeight: 3,
-                            thumbShape: const RoundSliderThumbShape(
-                                enabledThumbRadius: 6),
-                            overlayShape: const RoundSliderOverlayShape(
-                                overlayRadius: 10),
-                            activeTrackColor: Colors.blue,
-                            inactiveTrackColor: Colors.white24,
-                            thumbColor: Colors.blue,
-                          ),
-                          child: Slider(
-                            value: _isSeeking
-                                ? _seekValue
-                                : _position.inMilliseconds
-                                    .toDouble()
-                                    .clamp(
-                                        0,
-                                        _duration.inMilliseconds
-                                            .toDouble()
-                                            .clamp(1, double.infinity)),
-                            min: 0,
-                            max: _duration.inMilliseconds
-                                .toDouble()
-                                .clamp(1, double.infinity),
-                            onChangeStart: (v) {
-                              setState(() {
-                                _isSeeking = true;
-                                _seekValue = v;
-                              });
-                            },
-                            onChanged: (v) {
-                              setState(() => _seekValue = v);
-                              _scheduleHide();
-                            },
-                            onChangeEnd: (v) {
-                              ref.read(playerServiceProvider).player.seek(
-                                  Duration(milliseconds: v.round()));
-                              setState(() => _isSeeking = false);
-                            },
+                // ── Bottom row: seek bar (only for VOD/Series with known duration) ──
+                if (_duration.inMilliseconds > 0)
+                  Container(
+                    color: Colors.black.withValues(alpha: 0.7),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                    child: Row(
+                      children: [
+                        Text(
+                          _formatDuration(
+                              _isSeeking
+                                  ? Duration(
+                                      milliseconds: _seekValue.round())
+                                  : _position),
+                          style: const TextStyle(
+                              color: Colors.white70, fontSize: 12),
+                        ),
+                        Expanded(
+                          child: SliderTheme(
+                            data: SliderTheme.of(context).copyWith(
+                              trackHeight: 3,
+                              thumbShape: const RoundSliderThumbShape(
+                                  enabledThumbRadius: 6),
+                              overlayShape: const RoundSliderOverlayShape(
+                                  overlayRadius: 10),
+                              activeTrackColor: Colors.blue,
+                              inactiveTrackColor: Colors.white24,
+                              thumbColor: Colors.blue,
+                            ),
+                            child: Slider(
+                              value: _isSeeking
+                                  ? _seekValue
+                                  : _position.inMilliseconds
+                                      .toDouble()
+                                      .clamp(
+                                          0,
+                                          _duration.inMilliseconds
+                                              .toDouble()
+                                              .clamp(1, double.infinity)),
+                              min: 0,
+                              max: _duration.inMilliseconds
+                                  .toDouble()
+                                  .clamp(1, double.infinity),
+                              onChangeStart: (v) {
+                                setState(() {
+                                  _isSeeking = true;
+                                  _seekValue = v;
+                                });
+                              },
+                              onChanged: (v) {
+                                setState(() => _seekValue = v);
+
+                              },
+                              onChangeEnd: (v) {
+                                ref.read(playerServiceProvider).player.seek(
+                                    Duration(milliseconds: v.round()));
+                                setState(() => _isSeeking = false);
+                              },
+                            ),
                           ),
                         ),
-                      ),
-                      Text(
-                        _formatDuration(_duration),
-                        style: const TextStyle(
-                            color: Colors.white70, fontSize: 12),
-                      ),
-                    ],
+                        Text(
+                          _formatDuration(_duration),
+                          style: const TextStyle(
+                              color: Colors.white70, fontSize: 12),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
               ],
             ),
           ),
-        ),
-      ),
-    );
+        );
   }
 
   // ── Small helpers ──
 
   Widget _iconBtn(IconData icon,
-      {VoidCallback? onTap, Color color = Colors.white, double size = 20}) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(16),
+      {VoidCallback? onTap, Color color = Colors.white, double size = 20, FocusNode? focusNode}) {
+    return _TvFocusableIcon(
+      icon: icon,
+      color: color,
+      size: size,
       onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.all(6),
-        child: Icon(icon, color: color, size: size),
-      ),
+      focusNode: focusNode,
     );
   }
 
@@ -752,4 +638,62 @@ class _BufferSparklinePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _BufferSparklinePainter old) => true;
+}
+
+/// A D-pad focusable icon button for TV navigation.
+/// Shows a white border when focused and handles Select/Enter to invoke onTap.
+class _TvFocusableIcon extends StatefulWidget {
+  final IconData icon;
+  final Color color;
+  final double size;
+  final VoidCallback? onTap;
+  final FocusNode? focusNode;
+
+  const _TvFocusableIcon({
+    required this.icon,
+    this.color = Colors.white,
+    this.size = 20,
+    this.onTap,
+    this.focusNode,
+  });
+
+  @override
+  State<_TvFocusableIcon> createState() => _TvFocusableIconState();
+}
+
+class _TvFocusableIconState extends State<_TvFocusableIcon> {
+  bool _hasFocus = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Focus(
+      focusNode: widget.focusNode,
+      onFocusChange: (focused) => setState(() => _hasFocus = focused),
+      onKeyEvent: (node, event) {
+        if (event is KeyDownEvent &&
+            (event.logicalKey == LogicalKeyboardKey.select ||
+             event.logicalKey == LogicalKeyboardKey.enter ||
+             event.logicalKey == LogicalKeyboardKey.gameButtonA)) {
+          widget.onTap?.call();
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      },
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: Container(
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: _hasFocus ? Colors.white : Colors.transparent,
+              width: 2,
+            ),
+            color: _hasFocus ? Colors.white.withValues(alpha: 0.15) : Colors.transparent,
+          ),
+          child: Icon(widget.icon, color: widget.color, size: widget.size),
+        ),
+      ),
+    );
+  }
 }
